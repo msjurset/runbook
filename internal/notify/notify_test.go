@@ -85,7 +85,7 @@ func TestSendSkippedByPolicy(t *testing.T) {
 		Name: "test",
 		Notify: &runbook.NotifyConfig{
 			On:    "failure",
-			MacOS: true,
+			Desktop: true,
 		},
 	}
 	result := engine.RunResult{Success: true}

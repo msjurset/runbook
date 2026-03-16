@@ -30,9 +30,9 @@ func Send(book *runbook.Runbook, result engine.RunResult) []error {
 		}
 	}
 
-	if cfg.MacOS {
-		if err := sendMacOS(book.Name, subject); err != nil {
-			errs = append(errs, fmt.Errorf("macos: %w", err))
+	if cfg.Desktop || cfg.MacOS {
+		if err := sendDesktop(book.Name, subject); err != nil {
+			errs = append(errs, fmt.Errorf("desktop: %w", err))
 		}
 	}
 

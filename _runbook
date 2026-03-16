@@ -3,6 +3,20 @@
 # Zsh completion script for runbook
 # Install: cp _runbook ~/.oh-my-zsh/custom/completions/
 
+# Dynamic completion: runbook names from ~/.runbook/books/ and cwd
+_runbook_names() {
+    local -a names
+    names=(${(f)"$(runbook completion-names 2>/dev/null)"})
+    _describe -t runbooks 'runbook' names
+}
+
+# Offer both known runbook names and yaml files
+_runbook_name_or_file() {
+    _alternative \
+        'runbooks:runbook:_runbook_names' \
+        'files:file:_files -g "*.y(a|)ml"'
+}
+
 _runbook() {
     local -a commands
     commands=(
@@ -12,6 +26,7 @@ _runbook() {
         'validate:Validate a runbook without executing'
         'history:Show runbook execution history'
         'auth:Pre-resolve and cache 1Password secrets'
+        'notify:Send a test notification'
         'cron:Manage scheduled runbook execution'
         'pull:Pull runbooks from a git repo or URL'
         'help:Help about any command'
@@ -39,14 +54,21 @@ _runbook() {
                         '--no-tui[Disable TUI mode]' \
                         '-h[Show help]' \
                         '--help[Show help]' \
-                        '1:runbook:_files -g "*.y(a|)ml"'
+                        '1:runbook:_runbook_name_or_file'
                     ;;
                 show|validate|auth)
                     _arguments \
                         '--clear[Remove cached secrets (auth only)]' \
                         '-h[Show help]' \
                         '--help[Show help]' \
-                        '1:runbook:_files -g "*.y(a|)ml"'
+                        '1:runbook:_runbook_name_or_file'
+                    ;;
+                notify)
+                    _arguments \
+                        '--fail[Simulate a failed run]' \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1:runbook:_runbook_name_or_file'
                     ;;
                 list)
                     _arguments \
@@ -56,7 +78,7 @@ _runbook() {
                 history)
                     _arguments \
                         {-n,--limit}'[Max records to show]:number:' \
-                        '--runbook[Filter by runbook name]:name:' \
+                        '--runbook[Filter by runbook name]:name:_runbook_names' \
                         '-h[Show help]' \
                         '--help[Show help]'
                     ;;
@@ -82,14 +104,14 @@ _runbook() {
                                     _arguments \
                                         '-h[Show help]' \
                                         '--help[Show help]' \
-                                        '1:runbook:_files -g "*.y(a|)ml"' \
+                                        '1:runbook:_runbook_name_or_file' \
                                         '2:schedule:'
                                     ;;
                                 remove)
                                     _arguments \
                                         '-h[Show help]' \
                                         '--help[Show help]' \
-                                        '1:name:'
+                                        '1:runbook:_runbook_names'
                                     ;;
                                 list)
                                     _arguments \

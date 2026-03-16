@@ -130,7 +130,7 @@ notify:
   on: failure
   slack:
     webhook: "op://Vault/Slack/webhook"
-  macos: true
+  desktop: true
 ```
 
 ### Notifications
@@ -142,7 +142,7 @@ Runbooks can send notifications after completion. Add a `notify` section to the 
 | `on` | When to notify: `always` (default), `failure`, `success` |
 | `slack.webhook` | Slack incoming webhook URL (supports `op://` references) |
 | `slack.channel` | Override default webhook channel |
-| `macos` | `true` to show a macOS system notification |
+| `desktop` | `true` to show a native OS notification (macOS, Linux, Windows) |
 | `email.to` | Recipient email address |
 | `email.from` | Sender email address |
 | `email.host` | SMTP server as `host:port` |

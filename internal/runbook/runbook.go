@@ -32,10 +32,11 @@ type Runbook struct {
 
 // NotifyConfig controls notifications sent after a runbook completes.
 type NotifyConfig struct {
-	On    string       `yaml:"on,omitempty"` // "always", "failure", "success" (default: "always")
-	Slack *SlackConfig `yaml:"slack,omitempty"`
-	MacOS bool         `yaml:"macos,omitempty"`
-	Email *EmailConfig `yaml:"email,omitempty"`
+	On      string       `yaml:"on,omitempty"` // "always", "failure", "success" (default: "always")
+	Slack   *SlackConfig `yaml:"slack,omitempty"`
+	Desktop bool         `yaml:"desktop,omitempty"` // native OS notification (macOS/Linux/Windows)
+	MacOS   bool         `yaml:"macos,omitempty"`   // deprecated: use desktop
+	Email   *EmailConfig `yaml:"email,omitempty"`
 }
 
 // SlackConfig holds Slack webhook notification settings.

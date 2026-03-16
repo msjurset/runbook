@@ -230,8 +230,9 @@ Supported channels:
 Post to a Slack incoming webhook. The \fBwebhook\fR field can be an
 \fBop://\fR reference. Optional \fBchannel\fR overrides the default.
 .TP
-.B macos
-Show a native macOS notification via \fBosascript\fR.
+.B desktop
+Show a native OS notification. Uses \fBosascript\fR on macOS,
+\fBnotify-send\fR on Linux, and Windows toast notifications via PowerShell.
 .TP
 .B email
 Send an email via SMTP. Supports \fBto\fR, \fBfrom\fR, \fBhost\fR

@@ -39,5 +39,7 @@ install-man:
 install-completion:
 	install -d ~/.oh-my-zsh/custom/completions
 	install -m 644 _runbook ~/.oh-my-zsh/custom/completions/_runbook
+	@echo "Refreshing zsh completions..."
+	@zsh -c 'autoload -U compinit && rm -f ~/.zcompdump* && compinit' 2>/dev/null || true
 
 .PHONY: build run test release clean deploy install-man install-completion

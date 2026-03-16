@@ -5,7 +5,7 @@ import (
 	"os/exec"
 )
 
-func sendMacOS(runbookName, subject string) error {
+func sendDesktop(runbookName, subject string) error {
 	script := fmt.Sprintf(
 		`display notification %q with title "runbook" subtitle %q`,
 		subject, runbookName,
