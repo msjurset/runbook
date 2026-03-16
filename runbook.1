@@ -1,0 +1,265 @@
+.TH RUNBOOK 1 "March 2026" "version 1.0.0" "User Commands"
+.SH NAME
+runbook \- personal command center and runbook engine
+.SH SYNOPSIS
+.B runbook
+.I command
+[\fIOPTIONS\fR]
+[\fIarguments\fR]
+.SH DESCRIPTION
+.B runbook
+defines, manages, and executes multi-step operational runbooks from YAML
+definitions. Steps can run local shell commands, SSH into remote hosts, or
+make HTTP requests. Variables are passed between steps, and error policies
+control execution flow.
+.PP
+Runbooks are discovered from \fB~/.runbook/books/\fR by default and from
+the current directory. Each runbook is a YAML file defining a name,
+optional variables, and an ordered list of steps.
+.PP
+Steps support per-step timeouts, error handling policies (abort, continue,
+retry), conditional execution via Go template expressions, confirmation
+prompts, and output capture into variables for use in later steps.
+.SH COMMANDS
+.TP
+.B run \fI<name|path>\fR
+Execute a runbook. Looks up by name in the runbook directory, by filename,
+or by direct file path.
+.TP
+.B list
+List all discovered runbooks from the configured directory and current
+working directory.
+.TP
+.B show \fI<name|path>\fR
+Print runbook details including variables, steps, types, and step
+configuration (timeouts, error policies, capture targets).
+.TP
+.B validate \fI<name|path>\fR
+Parse and validate a runbook without executing it. Reports structural
+errors such as missing names, invalid step types, or misconfigured
+retry policies.
+.TP
+.B history
+Show runbook execution history. Each run is saved as a JSON file in
+\fB~/.runbook/history/\fR with per-step timing and status.
+.TP
+.B auth \fI<name|path>\fR
+Pre-resolve and cache 1Password secrets in the system keychain.
+Scans the runbook for variables with \fBop://\fR default values and
+resolves them via the 1Password CLI. Use \fB--clear\fR to remove
+cached secrets.
+.TP
+.B pull \fI<repo-url|file-url>\fR
+Clone a git repository into \fB~/.runbook/books/\fR so its YAML files
+become discoverable. If previously pulled, updates to the latest version.
+Also supports downloading a single YAML file by URL.
+.TP
+.B pull list
+List pulled repositories and their runbook counts.
+.TP
+.B pull remove \fI<name>\fR
+Remove a previously pulled repository.
+.TP
+.B cron add \fI<name|path>\fR \fI<schedule>\fR
+Add a crontab entry to run a runbook on a schedule. The schedule uses
+standard cron syntax (5 fields: minute hour day-of-month month day-of-week).
+Output is logged to \fB~/.runbook/history/<name>.log\fR.
+.TP
+.B cron list
+List all runbook-managed crontab entries.
+.TP
+.B cron remove \fI<name>\fR
+Remove a scheduled runbook from crontab.
+.SH OPTIONS
+.SS Global Options
+.TP
+.BR \-\-dir " \fIDIR\fR"
+Override the runbook directory. Default: \fB~/.runbook/books/\fR.
+.SS Run Options
+.TP
+.BR \-\-var " \fIkey=value\fR"
+Set a variable for the run. Can be specified multiple times. Overrides
+defaults and environment variables.
+.TP
+.BR \-\-dry\-run
+Validate and display the runbook, variables, and steps without executing.
+.TP
+.BR \-\-yes
+Auto-confirm all confirmation prompts.
+.TP
+.BR \-\-no\-tui
+Disable TUI mode and use plain streaming output.
+.SS History Options
+.TP
+.BR \-n ", " \-\-limit " \fIN\fR"
+Maximum number of records to show. Default: 20.
+.TP
+.BR \-\-runbook " \fINAME\fR"
+Filter history by runbook name.
+.SS Auth Options
+.TP
+.BR \-\-clear
+Remove cached secrets from the system keychain instead of resolving.
+.SS Cron Schedule Syntax
+Standard cron format with 5 fields:
+.PP
+.RS
+minute (0-59) hour (0-23) day-of-month (1-31) month (1-12) day-of-week (0-7)
+.RE
+.PP
+Examples: \fB"0 3 * * 0"\fR (Sundays at 3am), \fB"*/15 * * * *"\fR (every 15 min),
+\fB"30 2 * * 1-5"\fR (weekdays at 2:30am).
+.SH VARIABLES
+Variables can be defined in runbook YAML with defaults, required flags, and
+interactive prompts. Values are resolved in priority order:
+.PP
+.RS
+1. YAML default value (lowest priority)
+.br
+2. Environment variable \fBRUNBOOK_VAR_<NAME>\fR
+.br
+3. CLI \fB\-\-var\fR flag (highest priority)
+.RE
+.PP
+Variable references use Go template syntax: \fB{{.varname}}\fR. All string
+fields in steps (command, URL, body, headers, confirm) are template-expanded
+before execution.
+.SH STEP TYPES
+.TP
+.B shell
+Run a local shell command via \fBsh -c\fR. Supports \fBcommand\fR and
+optional \fBdir\fR fields.
+.TP
+.B ssh
+Run a command on a remote host via SSH. Supports \fBhost\fR, \fBuser\fR,
+\fBport\fR, \fBkey_file\fR, \fBcommand\fR, and \fBagent_auth\fR fields.
+.TP
+.B http
+Make an HTTP request. Supports \fBmethod\fR, \fBurl\fR, \fBheaders\fR,
+and \fBbody\fR fields.
+.SH STEP FEATURES
+.TP
+.B capture
+Store stdout (shell/ssh) or response body (http) into a named variable.
+.TP
+.B condition
+Go template expression. Step runs only if it renders to \fB"true"\fR.
+.TP
+.B on_error
+Error policy: \fBabort\fR (default), \fBcontinue\fR, or \fBretry\fR.
+.TP
+.B retries
+Maximum retry count when on_error is \fBretry\fR.
+.TP
+.B timeout
+Per-step timeout as a duration string (e.g., \fB30s\fR, \fB5m\fR).
+.TP
+.B confirm
+Prompt the user before executing. Template-expanded.
+.TP
+.B parallel
+When consecutive steps have \fBparallel: true\fR, they run concurrently.
+.SH EXAMPLES
+.TP
+.B runbook run deploy.yaml
+Execute the deploy.yaml runbook in the current directory.
+.TP
+.B runbook run \-\-var version=1.2.3 deploy
+Find and run the "deploy" runbook, setting the version variable.
+.TP
+.B runbook run \-\-yes \-\-var host=web01 restart-services
+Run with auto-confirmed prompts and a host override.
+.TP
+.B runbook run \-\-dry\-run deploy.yaml
+Show what would be executed without running anything.
+.TP
+.B runbook list
+List all available runbooks.
+.TP
+.B runbook show deploy
+Display details of the deploy runbook.
+.TP
+.B runbook validate deploy.yaml
+Validate the runbook structure without executing.
+.TP
+.B runbook history
+Show recent run history.
+.TP
+.B runbook history \-n 5 \-\-runbook deploy
+Show last 5 runs of the deploy runbook.
+.TP
+.B runbook auth deploy
+Pre-cache 1Password secrets for the deploy runbook.
+.TP
+.B runbook auth \-\-clear deploy
+Remove cached secrets for the deploy runbook.
+.TP
+.B runbook pull github.com/user/runbooks
+Pull runbooks from a git repository.
+.TP
+.B runbook pull https://example.com/deploy.yaml
+Download a single runbook file.
+.TP
+.B runbook cron add update-pihole "0 3 * * 0"
+Schedule the update-pihole runbook to run every Sunday at 3:00 AM.
+.TP
+.B runbook cron list
+List all scheduled runbooks.
+.TP
+.B runbook cron remove update-pihole
+Remove the update-pihole schedule.
+.SH 1PASSWORD SECRETS
+Variables with \fBop://\fR default values (e.g., \fBop://Vault/Item/field\fR)
+are resolved through the 1Password CLI (\fBop read\fR) and cached in the
+system keychain. This allows runbooks to reference secrets without storing
+them in plaintext YAML files.
+.PP
+Use \fBrunbook auth <name>\fR to pre-cache secrets before running, or let
+them be resolved automatically on first run. Cached values persist in the
+system keychain until explicitly cleared.
+.PP
+Supported keychains: macOS Keychain, GNOME Secret Service (Linux),
+Windows Credential Manager.
+.SH NOTIFICATIONS
+Runbooks can send notifications after completion via a \fBnotify\fR section
+in the YAML definition.
+.PP
+Supported channels:
+.TP
+.B slack
+Post to a Slack incoming webhook. The \fBwebhook\fR field can be an
+\fBop://\fR reference. Optional \fBchannel\fR overrides the default.
+.TP
+.B macos
+Show a native macOS notification via \fBosascript\fR.
+.TP
+.B email
+Send an email via SMTP. Supports \fBto\fR, \fBfrom\fR, \fBhost\fR
+(host:port), \fBusername\fR, and \fBpassword\fR (supports \fBop://\fR).
+.PP
+The \fBon\fR field controls when to notify: \fBalways\fR (default),
+\fBfailure\fR, or \fBsuccess\fR.
+.SH EXIT STATUS
+.TP
+.B 0
+Success. All steps completed or the command finished without error.
+.TP
+.B 1
+An error occurred. A step failed with abort policy, validation failed,
+or the runbook was not found.
+.SH FILES
+.TP
+.B ~/.runbook/books/
+Default directory for runbook YAML files.
+.TP
+.B ~/.runbook/history/
+Run history storage (JSON files, one per execution).
+.SH ENVIRONMENT
+.TP
+.B RUNBOOK_VAR_<NAME>
+Set a runbook variable via environment. The variable name is uppercased.
+For example, \fBRUNBOOK_VAR_HOST=prod01\fR sets the \fBhost\fR variable.
+.SH AUTHOR
+Mark Sjurseth
+.SH COPYRIGHT
+Copyright (c) 2026. MIT License.

@@ -1,0 +1,146 @@
+#compdef runbook
+
+# Zsh completion script for runbook
+# Install: cp _runbook ~/.oh-my-zsh/custom/completions/
+
+_runbook() {
+    local -a commands
+    commands=(
+        'run:Execute a runbook'
+        'list:List available runbooks'
+        'show:Show runbook details'
+        'validate:Validate a runbook without executing'
+        'history:Show runbook execution history'
+        'auth:Pre-resolve and cache 1Password secrets'
+        'cron:Manage scheduled runbook execution'
+        'pull:Pull runbooks from a git repo or URL'
+        'help:Help about any command'
+        'completion:Generate the autocompletion script for the specified shell'
+    )
+
+    _arguments -C \
+        '--dir[Runbook directory]:directory:_directories' \
+        '-h[Show help]' \
+        '--help[Show help]' \
+        '1: :->cmd' \
+        '*:: :->args'
+
+    case $state in
+        cmd)
+            _describe -t commands 'runbook commands' commands
+            ;;
+        args)
+            case $words[1] in
+                run)
+                    _arguments \
+                        '*--var[Set variable (key=value)]:variable:' \
+                        '--dry-run[Validate and show steps without executing]' \
+                        '--yes[Auto-confirm all prompts]' \
+                        '--no-tui[Disable TUI mode]' \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1:runbook:_files -g "*.y(a|)ml"'
+                    ;;
+                show|validate|auth)
+                    _arguments \
+                        '--clear[Remove cached secrets (auth only)]' \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1:runbook:_files -g "*.y(a|)ml"'
+                    ;;
+                list)
+                    _arguments \
+                        '-h[Show help]' \
+                        '--help[Show help]'
+                    ;;
+                history)
+                    _arguments \
+                        {-n,--limit}'[Max records to show]:number:' \
+                        '--runbook[Filter by runbook name]:name:' \
+                        '-h[Show help]' \
+                        '--help[Show help]'
+                    ;;
+                cron)
+                    local -a cron_commands
+                    cron_commands=(
+                        'add:Schedule a runbook on a cron schedule'
+                        'list:List all scheduled runbooks'
+                        'remove:Remove a scheduled runbook'
+                    )
+                    _arguments -C \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1: :->cron_cmd' \
+                        '*:: :->cron_args'
+                    case $state in
+                        cron_cmd)
+                            _describe -t cron_commands 'cron commands' cron_commands
+                            ;;
+                        cron_args)
+                            case $words[1] in
+                                add)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]' \
+                                        '1:runbook:_files -g "*.y(a|)ml"' \
+                                        '2:schedule:'
+                                    ;;
+                                remove)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]' \
+                                        '1:name:'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                pull)
+                    local -a pull_commands
+                    pull_commands=(
+                        'list:List pulled repositories'
+                        'remove:Remove a pulled repository'
+                    )
+                    _arguments -C \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1: :->pull_cmd' \
+                        '*:: :->pull_args'
+                    case $state in
+                        pull_cmd)
+                            _describe -t pull_commands 'pull commands' pull_commands
+                            ;;
+                        pull_args)
+                            case $words[1] in
+                                remove)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]' \
+                                        '1:name:'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                completion)
+                    _arguments \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1:shell:(bash zsh fish powershell)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_runbook "$@"

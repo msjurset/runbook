@@ -1,0 +1,31 @@
+name: simple-test
+description: A simple test runbook with shell commands
+
+variables:
+  - name: greeting
+    default: "Hello"
+  - name: target
+    default: "World"
+
+steps:
+  - name: Say hello
+    type: shell
+    shell:
+      command: "echo '{{.greeting}}, {{.target}}!'"
+
+  - name: Show date
+    type: shell
+    shell:
+      command: "date"
+    capture: current_date
+
+  - name: Show captured date
+    type: shell
+    shell:
+      command: "echo 'The date was captured as: {{.current_date}}'"
+
+  - name: List current directory
+    type: shell
+    shell:
+      command: "ls -la"
+    timeout: 10s

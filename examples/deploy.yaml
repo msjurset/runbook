@@ -1,0 +1,73 @@
+name: deploy-web-app
+description: Deploy the web application to production
+
+variables:
+  - name: version
+    required: true
+    prompt: "Enter version to deploy"
+  - name: environment
+    default: production
+  - name: deploy_host
+    default: "prod-web-01.internal"
+
+steps:
+  - name: Run tests
+    type: shell
+    shell:
+      command: "echo 'Running test suite...'; sleep 1; echo 'All tests passed'"
+    timeout: 5m
+    on_error: abort
+
+  - name: Build artifact
+    type: shell
+    shell:
+      command: "echo 'Building version {{.version}}...'; sleep 1; echo 'Build complete'"
+    timeout: 3m
+    capture: build_output
+
+  - name: Pre-deploy health check
+    type: http
+    http:
+      method: GET
+      url: "https://{{.deploy_host}}:8080/healthz"
+    capture: health_before
+    on_error: continue
+
+  - name: Confirm deployment
+    confirm: "Deploy version {{.version}} to {{.environment}}?"
+
+  - name: Stop current service
+    type: ssh
+    ssh:
+      host: "{{.deploy_host}}"
+      user: deploy
+      agent_auth: true
+      command: "sudo systemctl stop web-app"
+    timeout: 30s
+
+  - name: Start service
+    type: ssh
+    ssh:
+      host: "{{.deploy_host}}"
+      user: deploy
+      agent_auth: true
+      command: "sudo systemctl start web-app"
+    timeout: 30s
+
+  - name: Post-deploy health check
+    type: http
+    http:
+      method: GET
+      url: "https://{{.deploy_host}}:8080/healthz"
+      headers:
+        Accept: application/json
+    timeout: 30s
+    retries: 3
+    on_error: retry
+    capture: health_after
+
+  - name: Report status
+    type: shell
+    shell:
+      command: "echo 'Deployed {{.version}} to {{.environment}} successfully'"
+    on_error: continue

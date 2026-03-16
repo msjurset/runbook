@@ -1,0 +1,39 @@
+name: multi-service-healthcheck
+description: Check health of multiple services in parallel
+
+variables:
+  - name: base_url
+    default: "http://localhost"
+
+steps:
+  - name: Check API
+    type: http
+    http:
+      method: GET
+      url: "{{.base_url}}:8080/healthz"
+    parallel: true
+    capture: api_health
+    on_error: continue
+
+  - name: Check Web
+    type: http
+    http:
+      method: GET
+      url: "{{.base_url}}:3000/health"
+    parallel: true
+    capture: web_health
+    on_error: continue
+
+  - name: Check Worker
+    type: http
+    http:
+      method: GET
+      url: "{{.base_url}}:9090/health"
+    parallel: true
+    capture: worker_health
+    on_error: continue
+
+  - name: Report results
+    type: shell
+    shell:
+      command: "echo 'API: {{.api_health}}'; echo 'Web: {{.web_health}}'; echo 'Worker: {{.worker_health}}'"
