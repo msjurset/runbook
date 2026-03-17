@@ -32,3 +32,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+
+      - name: Update Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          TARBALL_URL="https://github.com/msjurset/runbook/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
+          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | cut -d ' ' -f 1)
+          git clone https://x-access-token:${TAP_TOKEN}@github.com/msjurset/homebrew-tap.git /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+          sed -i "s|url \".*\"|url \"${TARBALL_URL}\"|" Formula/runbook.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/runbook.rb
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" Formula/runbook.rb 2>/dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/runbook.rb
+          git commit -m "runbook ${VERSION}"
+          git push

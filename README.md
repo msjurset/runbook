@@ -23,7 +23,15 @@ Personal command center and runbook engine. Define, manage, and execute multi-st
 
 ## Install
 
+### Homebrew
+
+```sh
+brew install msjurset/tap/runbook
 ```
+
+### From source
+
+```sh
 make deploy
 ```
 
