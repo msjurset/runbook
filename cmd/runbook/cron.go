@@ -33,10 +33,14 @@ Examples:
 }
 
 var cronRemoveCmd = &cobra.Command{
-	Use:   "remove <name>",
+	Use:   "remove <name> [schedule]",
 	Short: "Remove a scheduled runbook from crontab",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runCronRemove,
+	Long: `Remove cron entries for a runbook.
+
+  runbook cron remove my-runbook              # remove ALL schedules
+  runbook cron remove my-runbook "0 3 * * 0"  # remove specific schedule`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: runCronRemove,
 }
 
 var cronListCmd = &cobra.Command{
@@ -75,10 +79,19 @@ func runCronAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runCronRemove(cmd *cobra.Command, args []string) error {
-	if err := cron.Remove(args[0]); err != nil {
+	name := args[0]
+	schedule := ""
+	if len(args) > 1 {
+		schedule = args[1]
+	}
+	if err := cron.RemoveSchedule(name, schedule); err != nil {
 		return err
 	}
-	fmt.Printf("✓ Removed cron schedule for %q\n", args[0])
+	if schedule != "" {
+		fmt.Printf("✓ Removed schedule %q for %q\n", schedule, name)
+	} else {
+		fmt.Printf("✓ Removed all schedules for %q\n", name)
+	}
 	return nil
 }
 

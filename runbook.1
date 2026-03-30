@@ -54,6 +54,10 @@ Clone a git repository into \fB~/.runbook/books/\fR so its YAML files
 become discoverable. If previously pulled, updates to the latest version.
 Also supports downloading a single YAML file by URL.
 .TP
+.TP
+.B man
+Print the manual page to stdout. Pipe to \fBman -l -\fR for formatted output.
+.TP
 .B pull list
 List pulled repositories and their runbook counts.
 .TP
@@ -103,12 +107,52 @@ Remove cached secrets from the system keychain instead of resolving.
 .SS Cron Schedule Syntax
 Standard cron format with 5 fields:
 .PP
-.RS
-minute (0-59) hour (0-23) day-of-month (1-31) month (1-12) day-of-week (0-7)
-.RE
+.nf
+\[u250C]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] minute (0\-59)
+\[u2502] \[u250C]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] hour (0\-23)
+\[u2502] \[u2502] \[u250C]\[u2500]\[u2500]\[u2500]\[u2500]\[u2500] day of month (1\-31)
+\[u2502] \[u2502] \[u2502] \[u250C]\[u2500]\[u2500]\[u2500] month (1\-12)
+\[u2502] \[u2502] \[u2502] \[u2502] \[u250C]\[u2500] day of week (0\-6, Sun=0)
+* * * * *
+.fi
 .PP
-Examples: \fB"0 3 * * 0"\fR (Sundays at 3am), \fB"*/15 * * * *"\fR (every 15 min),
-\fB"30 2 * * 1-5"\fR (weekdays at 2:30am).
+.TP
+.B *
+Every value.
+.TP
+.B ,
+Value list (e.g., \fB1,3,5\fR).
+.TP
+.B \-
+Range (e.g., \fB1\-5\fR for Monday through Friday).
+.TP
+.B /
+Step interval (e.g., \fB*/15\fR for every 15, \fB1/15\fR for every 15 starting at 1).
+.PP
+When both day-of-month and day-of-week are specified, cron fires when
+\fBeither\fR matches (OR, not AND).
+.PP
+Examples:
+.RS
+.TP
+\fB"0 9 * * *"\fR
+Every day at 9:00 AM.
+.TP
+\fB"0 3 * * 0"\fR
+Every Sunday at 3:00 AM.
+.TP
+\fB"*/15 * * * *"\fR
+Every 15 minutes.
+.TP
+\fB"0 8 * * 1\-5"\fR
+Weekdays at 8:00 AM.
+.TP
+\fB"0 0 1 * *"\fR
+1st of every month at midnight.
+.TP
+\fB"0 9 1/15 * 6"\fR
+Every 15 days from the 1st, and on Saturdays, at 9:00 AM.
+.RE
 .SH VARIABLES
 Variables can be defined in runbook YAML with defaults, required flags, and
 interactive prompts. Values are resolved in priority order:
@@ -208,6 +252,9 @@ List all scheduled runbooks.
 .TP
 .B runbook cron remove update-pihole
 Remove the update-pihole schedule.
+.TP
+.B runbook man | man -l -
+View the formatted manual page.
 .SH 1PASSWORD SECRETS
 Variables with \fBop://\fR default values (e.g., \fBop://Vault/Item/field\fR)
 are resolved through the 1Password CLI (\fBop read\fR) and cached in the

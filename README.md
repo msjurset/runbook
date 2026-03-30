@@ -224,6 +224,40 @@ runbook cron list
 
 # Remove a schedule
 runbook cron remove update-pihole
+```
+
+### Cron Schedule Syntax
+
+```
+┌───────── minute (0-59)
+│ ┌─────── hour (0-23)
+│ │ ┌───── day of month (1-31)
+│ │ │ ┌─── month (1-12)
+│ │ │ │ ┌─ day of week (0-6, Sun=0)
+* * * * *
+```
+
+| Symbol | Meaning | Example |
+|--------|---------|---------|
+| `*` | every value | `* * * * *` — every minute |
+| `,` | list of values | `0 9,17 * * *` — at 9 AM and 5 PM |
+| `-` | range | `0 9 * * 1-5` — weekdays at 9 AM |
+| `/` | step interval | `*/15 * * * *` — every 15 minutes |
+
+When both day-of-month and day-of-week are specified, cron fires when **either** matches (OR, not AND).
+
+**Examples:**
+
+| Schedule | Description |
+|----------|-------------|
+| `0 9 * * *` | Every day at 9:00 AM |
+| `0 3 * * 0` | Every Sunday at 3:00 AM |
+| `*/15 * * * *` | Every 15 minutes |
+| `0 8 * * 1-5` | Weekdays at 8:00 AM |
+| `0 0 1 * *` | 1st of every month at midnight |
+| `0 9 1/15 * 6` | Every 15 days from the 1st, and on Saturdays, at 9:00 AM |
+
+```sh
 
 # Pull runbooks from a git repo
 runbook pull github.com/user/runbooks

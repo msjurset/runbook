@@ -17,7 +17,9 @@ type Entry struct {
 	Command  string
 }
 
-// Add installs a crontab entry for the given runbook.
+// Add installs a crontab entry for the given runbook and schedule.
+// Multiple schedules per runbook are allowed.
+// Adding the same name+schedule combination replaces the existing entry.
 func Add(name, schedule, logDir string) error {
 	binPath, err := resolveRunbookBin()
 	if err != nil {
@@ -37,22 +39,39 @@ func Add(name, schedule, logDir string) error {
 		return err
 	}
 
-	// Remove any existing entry for this runbook
-	filtered := filterOut(existing, name)
+	// Remove only the exact name+schedule combination (not all entries for this name)
+	filtered := filterOutExact(existing, name, schedule)
 	filtered = append(filtered, line)
 
 	return writeCrontab(filtered)
 }
 
-// Remove deletes the crontab entry for the given runbook.
+// Remove deletes crontab entries for the given runbook.
+// If schedule is empty, removes ALL schedules for the runbook.
+// If schedule is provided, removes only that specific schedule.
 func Remove(name string) error {
+	return RemoveSchedule(name, "")
+}
+
+// RemoveSchedule deletes a specific schedule for a runbook.
+// If schedule is empty, removes all schedules for the runbook.
+func RemoveSchedule(name, schedule string) error {
 	existing, err := readCrontab()
 	if err != nil {
 		return err
 	}
 
-	filtered := filterOut(existing, name)
+	var filtered []string
+	if schedule == "" {
+		filtered = filterOutByName(existing, name)
+	} else {
+		filtered = filterOutExact(existing, name, schedule)
+	}
+
 	if len(filtered) == len(existing) {
+		if schedule != "" {
+			return fmt.Errorf("no cron entry found for %q with schedule %q", name, schedule)
+		}
 		return fmt.Errorf("no cron entry found for %q", name)
 	}
 
@@ -120,7 +139,8 @@ func writeCrontab(lines []string) error {
 	return nil
 }
 
-func filterOut(lines []string, name string) []string {
+// filterOutByName removes all cron entries for the given runbook name.
+func filterOutByName(lines []string, name string) []string {
 	tag := marker + " " + name
 	var result []string
 	for _, line := range lines {
@@ -131,8 +151,20 @@ func filterOut(lines []string, name string) []string {
 	return result
 }
 
+// filterOutExact removes the cron entry matching both name and schedule.
+func filterOutExact(lines []string, name, schedule string) []string {
+	tag := marker + " " + name
+	var result []string
+	for _, line := range lines {
+		if strings.Contains(line, tag) && strings.HasPrefix(strings.TrimSpace(line), schedule+" ") {
+			continue // skip this exact match
+		}
+		result = append(result, line)
+	}
+	return result
+}
+
 func resolveRunbookBin() (string, error) {
-	// Try to find the absolute path of the running binary
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("resolving runbook binary path: %w", err)
@@ -141,7 +173,6 @@ func resolveRunbookBin() (string, error) {
 	if err != nil {
 		return exe, nil
 	}
-	// Resolve symlinks
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return abs, nil

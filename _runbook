@@ -29,6 +29,7 @@ _runbook() {
         'notify:Send a test notification'
         'cron:Manage scheduled runbook execution'
         'pull:Pull runbooks from a git repo or URL'
+        'man:Display the runbook manual page'
         'help:Help about any command'
         'completion:Generate the autocompletion script for the specified shell'
     )
@@ -70,7 +71,7 @@ _runbook() {
                         '--help[Show help]' \
                         '1:runbook:_runbook_name_or_file'
                     ;;
-                list)
+                list|man)
                     _arguments \
                         '-h[Show help]' \
                         '--help[Show help]'
