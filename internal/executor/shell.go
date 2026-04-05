@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"runtime"
 
@@ -73,7 +74,7 @@ func shellCmd() (string, string) {
 }
 
 func envWithVars(vars map[string]string) []string {
-	env := make([]string, 0, len(vars))
+	env := os.Environ()
 	for k, v := range vars {
 		env = append(env, fmt.Sprintf("RUNBOOK_%s=%s", k, v))
 	}
