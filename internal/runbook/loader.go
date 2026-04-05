@@ -38,6 +38,7 @@ func Load(path string) (*Runbook, error) {
 
 // Discover finds all .yaml and .yml files in the given directory
 // and one level of subdirectories (for pulled repos).
+// Directories named "templates" are skipped.
 func Discover(dir string) ([]*Runbook, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -47,12 +48,10 @@ func Discover(dir string) ([]*Runbook, error) {
 		return nil, fmt.Errorf("reading directory %s: %w", dir, err)
 	}
 
+	// Top-level YAML files first (local runbooks take priority)
 	var books []*Runbook
 	for _, e := range entries {
 		if e.IsDir() {
-			// Scan subdirectories (pulled repos)
-			subBooks, _ := discoverFlat(filepath.Join(dir, e.Name()))
-			books = append(books, subBooks...)
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))
@@ -65,11 +64,83 @@ func Discover(dir string) ([]*Runbook, error) {
 		}
 		books = append(books, rb)
 	}
+
+	// Then subdirectories (pulled repos), skipping templates
+	seen := make(map[string]bool)
+	for _, rb := range books {
+		seen[rb.Name] = true
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		subBooks, _ := discoverFlat(filepath.Join(dir, e.Name()), true)
+		for _, rb := range subBooks {
+			if !seen[rb.Name] {
+				books = append(books, rb)
+				seen[rb.Name] = true
+			}
+		}
+	}
 	return books, nil
 }
 
-// discoverFlat finds YAML runbook files in a single directory (no recursion).
-func discoverFlat(dir string) ([]*Runbook, error) {
+// DiscoverTemplates finds runbooks inside directories named "templates"
+// under the given directory.
+func DiscoverTemplates(dir string) ([]*Runbook, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading directory %s: %w", dir, err)
+	}
+
+	var templates []*Runbook
+	seen := make(map[string]bool)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		subTemplates, _ := discoverTemplatesIn(filepath.Join(dir, e.Name()))
+		for _, rb := range subTemplates {
+			if !seen[rb.Name] {
+				templates = append(templates, rb)
+				seen[rb.Name] = true
+			}
+		}
+	}
+	return templates, nil
+}
+
+// discoverTemplatesIn recursively finds runbooks inside directories named "templates".
+func discoverTemplatesIn(dir string) ([]*Runbook, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var templates []*Runbook
+	for _, e := range entries {
+		if e.IsDir() {
+			if strings.ToLower(e.Name()) == "templates" {
+				// Found a templates directory — collect all YAML files inside it
+				found, _ := discoverFlat(filepath.Join(dir, e.Name()), false)
+				templates = append(templates, found...)
+			} else {
+				// Keep looking deeper
+				sub, _ := discoverTemplatesIn(filepath.Join(dir, e.Name()))
+				templates = append(templates, sub...)
+			}
+			continue
+		}
+	}
+	return templates, nil
+}
+
+// discoverFlat finds YAML runbook files in a directory, recursing into subdirectories.
+// If skipTemplates is true, directories named "templates" are skipped.
+func discoverFlat(dir string, skipTemplates bool) ([]*Runbook, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -78,6 +149,11 @@ func discoverFlat(dir string) ([]*Runbook, error) {
 	var books []*Runbook
 	for _, e := range entries {
 		if e.IsDir() {
+			if skipTemplates && strings.ToLower(e.Name()) == "templates" {
+				continue
+			}
+			subBooks, _ := discoverFlat(filepath.Join(dir, e.Name()), skipTemplates)
+			books = append(books, subBooks...)
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))

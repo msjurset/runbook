@@ -17,26 +17,47 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
+	listCmd.Flags().Bool("templates", false, "List templates instead of runbooks")
 	rootCmd.AddCommand(listCmd)
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	books, err := runbook.Discover(cfg.RunbookDir)
+	showTemplates, _ := cmd.Flags().GetBool("templates")
+
+	var books []*runbook.Runbook
+	var err error
+
+	if showTemplates {
+		books, err = runbook.DiscoverTemplates(cfg.RunbookDir)
+	} else {
+		books, err = runbook.Discover(cfg.RunbookDir)
+	}
 	if err != nil {
 		return err
 	}
 
 	// Also discover from current directory
-	cwd, _ := os.Getwd()
-	if cwd != cfg.RunbookDir {
-		local, err := runbook.Discover(cwd)
-		if err == nil {
-			books = append(books, local...)
+	if !showTemplates {
+		cwd, _ := os.Getwd()
+		if cwd != cfg.RunbookDir {
+			local, err := runbook.Discover(cwd)
+			if err == nil {
+				books = append(books, local...)
+			}
 		}
 	}
 
+	label := "runbooks"
+	if showTemplates {
+		label = "templates"
+	}
+
 	if len(books) == 0 {
-		fmt.Printf("No runbooks found in %s or current directory.\n", cfg.RunbookDir)
+		fmt.Printf("No %s found in %s", label, cfg.RunbookDir)
+		if !showTemplates {
+			fmt.Print(" or current directory")
+		}
+		fmt.Println(".")
 		return nil
 	}
 
