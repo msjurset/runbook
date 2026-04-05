@@ -20,6 +20,7 @@ Personal command center and runbook engine. Define, manage, and execute multi-st
 - Cron scheduling — manage crontab entries for unattended runbook execution with log capture
 - Pull and share runbooks from git repos or URLs
 - Automatic runbook discovery from `~/.runbook/books/`, subdirectories (pulled repos), and the current directory
+- Template system — runbooks in `templates/` directories are excluded from normal listing and available via `list --templates` and `create --from`
 
 ## Install
 
@@ -48,7 +49,8 @@ runbook <command> [flags] [arguments]
 | Command | Description |
 |---------|-------------|
 | `run <name\|path>` | Execute a runbook |
-| `list` | List available runbooks |
+| `list` | List available runbooks (use `--templates` for templates) |
+| `create <name>` | Create a new runbook (use `--from <template>` to copy a template) |
 | `show <name\|path>` | Show runbook details |
 | `validate <name\|path>` | Validate a runbook without executing |
 | `history` | Show runbook execution history |
@@ -200,6 +202,15 @@ runbook run --no-tui deploy.yaml
 
 # List all available runbooks
 runbook list
+
+# List available templates
+runbook list --templates
+
+# Create a new runbook from a template
+runbook create my-deploy --from ssh-remote
+
+# Create a blank runbook
+runbook create my-task
 
 # Inspect a runbook's structure
 runbook show deploy
