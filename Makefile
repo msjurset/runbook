@@ -1,7 +1,10 @@
 VERSION ?= dev
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
-build:
+generate:
+	go generate ./internal/manpage/
+
+build: generate
 	go build $(LDFLAGS) -o runbook ./cmd/runbook
 
 run:
@@ -10,7 +13,7 @@ run:
 test:
 	go test -v ./...
 
-release: clean test
+release: clean generate test
 	@mkdir -p dist
 	cp runbook.1 dist/
 	GOOS=linux   GOARCH=amd64 go build $(LDFLAGS) -o dist/runbook ./cmd/runbook && \
@@ -42,4 +45,4 @@ install-completion:
 	@echo "Refreshing zsh completions..."
 	@zsh -c 'autoload -U compinit && rm -f ~/.zcompdump* && compinit' 2>/dev/null || true
 
-.PHONY: build run test release clean deploy install-man install-completion
+.PHONY: generate build run test release clean deploy install-man install-completion

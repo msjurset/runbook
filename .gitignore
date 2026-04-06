@@ -4,3 +4,4 @@ CLAUDE.md
 .vscode/
 /runbook
 dist/
+internal/manpage/runbook.1
