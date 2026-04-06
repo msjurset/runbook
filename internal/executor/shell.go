@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"runtime"
 
 	"github.com/msjurset/runbook/internal/runbook"
@@ -74,9 +75,24 @@ func shellCmd() (string, string) {
 }
 
 func envWithVars(vars map[string]string) []string {
-	env := os.Environ()
+	// Build set of keys we'll override
+	overrides := make(map[string]string, len(vars))
 	for k, v := range vars {
-		env = append(env, fmt.Sprintf("RUNBOOK_%s=%s", k, v))
+		overrides["RUNBOOK_"+k] = v
+	}
+
+	// Copy parent env, skipping keys we'll override
+	var env []string
+	for _, e := range os.Environ() {
+		key, _, _ := strings.Cut(e, "=")
+		if _, ok := overrides[key]; !ok {
+			env = append(env, e)
+		}
+	}
+
+	// Append our overrides
+	for k, v := range overrides {
+		env = append(env, k+"="+v)
 	}
 	return env
 }
