@@ -63,6 +63,7 @@ runbook <command> [flags] [arguments]
 | `pull remove <name>` | Remove a pulled repository |
 | `log reindex` | Rebuild log index from files in the logs directory |
 | `log reset-index` | Clear the log index |
+| `log update <old> <new>` | Update an index entry to point to a new file path |
 
 ### Global Flags
 

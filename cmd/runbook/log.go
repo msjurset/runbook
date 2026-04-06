@@ -34,9 +34,17 @@ var logResetCmd = &cobra.Command{
 	RunE:  runLogReset,
 }
 
+var logUpdateCmd = &cobra.Command{
+	Use:   "update <old-path> <new-path>",
+	Short: "Update a log index entry to point to a new file path",
+	Args:  cobra.ExactArgs(2),
+	RunE:  runLogUpdate,
+}
+
 func init() {
 	logCmd.AddCommand(logReindexCmd)
 	logCmd.AddCommand(logResetCmd)
+	logCmd.AddCommand(logUpdateCmd)
 	rootCmd.AddCommand(logCmd)
 }
 
@@ -112,6 +120,32 @@ func runLogReindex(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Indexed %d log files.\n", count)
+	return nil
+}
+
+func runLogUpdate(cmd *cobra.Command, args []string) error {
+	oldPath, _ := filepath.Abs(args[0])
+	newPath, _ := filepath.Abs(args[1])
+
+	idx := loadLogIndex()
+	updated := 0
+	for key, path := range idx.Entries {
+		absPath, _ := filepath.Abs(path)
+		if absPath == oldPath {
+			idx.Entries[key] = newPath
+			updated++
+		}
+	}
+
+	if updated == 0 {
+		fmt.Fprintf(os.Stderr, "no index entry found for %s\n", oldPath)
+		return nil
+	}
+
+	if err := saveLogIndex(idx); err != nil {
+		return fmt.Errorf("saving index: %w", err)
+	}
+	fmt.Printf("Updated %d index entry(s): %s → %s\n", updated, oldPath, newPath)
 	return nil
 }
 
