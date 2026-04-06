@@ -158,6 +158,7 @@ Runbooks can automatically save run output to log files. Add a `log` section to 
 | Field | Description |
 |-------|-------------|
 | `enabled` | `true` to auto-save output after each run (default: `false`) |
+| `mode` | `new` creates a file per run (default), `append` accumulates in a single file |
 | `dir` | Directory for log files (default: `~/.runbook/logs/`) |
 | `filename` | Filename template using `{name}` and `{timestamp}` (default: `{name}-{timestamp}`) |
 

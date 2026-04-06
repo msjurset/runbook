@@ -34,6 +34,7 @@ type Runbook struct {
 // LogConfig controls automatic run output logging.
 type LogConfig struct {
 	Enabled  bool   `yaml:"enabled"`
+	Mode     string `yaml:"mode,omitempty"`     // "new" (default) or "append"
 	Dir      string `yaml:"dir,omitempty"`      // defaults to ~/.runbook/logs/
 	Filename string `yaml:"filename,omitempty"` // Go time format template, defaults to {name}-{timestamp}
 }
