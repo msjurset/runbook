@@ -27,7 +27,15 @@ type Runbook struct {
 	Variables   []VariableDef `yaml:"variables"`
 	Steps       []Step        `yaml:"steps"`
 	Notify      *NotifyConfig `yaml:"notify,omitempty"`
+	Log         *LogConfig    `yaml:"log,omitempty"`
 	FilePath    string        `yaml:"-"` // resolved path on disk
+}
+
+// LogConfig controls automatic run output logging.
+type LogConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Dir      string `yaml:"dir,omitempty"`      // defaults to ~/.runbook/logs/
+	Filename string `yaml:"filename,omitempty"` // Go time format template, defaults to {name}-{timestamp}
 }
 
 // NotifyConfig controls notifications sent after a runbook completes.

@@ -61,6 +61,8 @@ runbook <command> [flags] [arguments]
 | `pull <repo-url\|file-url>` | Pull runbooks from a git repo or URL |
 | `pull list` | List pulled repositories |
 | `pull remove <name>` | Remove a pulled repository |
+| `log reindex` | Rebuild log index from files in the logs directory |
+| `log reset-index` | Clear the log index |
 
 ### Global Flags
 
@@ -141,7 +143,24 @@ notify:
   slack:
     webhook: "op://Vault/Slack/webhook"
   desktop: true
+
+log:
+  enabled: true
+  dir: "~/.runbook/logs/"
+  filename: "{name}-{timestamp}"
 ```
+
+### Logging
+
+Runbooks can automatically save run output to log files. Add a `log` section to the YAML:
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | `true` to auto-save output after each run (default: `false`) |
+| `dir` | Directory for log files (default: `~/.runbook/logs/`) |
+| `filename` | Filename template using `{name}` and `{timestamp}` (default: `{name}-{timestamp}`) |
+
+Logs are indexed in `~/.runbook/logs/index.json` for fast lookup. After log rotation, run `runbook log reindex` to rebuild the index.
 
 ### Notifications
 
