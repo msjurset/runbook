@@ -9,6 +9,7 @@ import (
 
 	"github.com/msjurset/runbook/internal/engine"
 	"github.com/msjurset/runbook/internal/history"
+	"github.com/msjurset/runbook/internal/logwriter"
 	"github.com/msjurset/runbook/internal/notify"
 	"github.com/msjurset/runbook/internal/runbook"
 	"github.com/msjurset/runbook/internal/tui"
@@ -113,17 +114,19 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Plain CLI mode
 	observer := &engine.CLIObserver{AutoConfirm: runFlags.yes}
 
-	fmt.Printf("Running: %s", book.Name)
+	header := fmt.Sprintf("Running: %s", book.Name)
 	if book.Description != "" {
-		fmt.Printf(" — %s", book.Description)
+		header += fmt.Sprintf(" — %s", book.Description)
 	}
-	fmt.Printf(" (%d steps)\n", len(book.Steps))
+	header += fmt.Sprintf(" (%d steps)\n", len(book.Steps))
+	fmt.Print(header)
 
 	eng := engine.New(book, vars, observer)
 	result := eng.Run(ctx)
 
 	saveHistory(book, result)
 	sendNotifications(book, result)
+	saveLog(book, header+observer.LogOutput(), result)
 
 	if !result.Success {
 		return fmt.Errorf("runbook failed")
@@ -154,6 +157,20 @@ func saveHistory(book *runbook.Runbook, result engine.RunResult) {
 	}
 	// Best-effort save — don't fail the run if history write fails
 	_ = store.Save(rec)
+}
+
+func saveLog(book *runbook.Runbook, output string, result engine.RunResult) {
+	if book.Log == nil || !book.Log.Enabled || runFlags.dryRun {
+		return
+	}
+	logPath, err := logwriter.Write(book, output, result.StartedAt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "log save error: %v\n", err)
+		return
+	}
+	if logPath != "" {
+		fmt.Fprintf(os.Stderr, "Log saved: %s\n", logPath)
+	}
 }
 
 func sendNotifications(book *runbook.Runbook, result engine.RunResult) {
