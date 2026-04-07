@@ -137,11 +137,25 @@ type logFileParts struct {
 }
 
 func splitLogFilename(s string) logFileParts {
-	for i := 0; i < len(s)-10; i++ {
+	// Try ISO-style: name-YYYY-MM-DDTHHmmss
+	for i := 0; i <= len(s)-10; i++ {
 		if s[i] >= '2' && s[i] <= '2' && i > 0 && s[i-1] == '-' {
 			candidate := s[i:]
 			if len(candidate) >= 10 && candidate[4] == '-' && candidate[7] == '-' {
 				_, err := time.Parse("2006-01-02", candidate[:10])
+				if err == nil {
+					name := s[:i-1]
+					return logFileParts{runbook: name, timestamp: candidate}
+				}
+			}
+		}
+	}
+	// Try rotation-style: name-YYYYMMDD-HHMMSS
+	for i := 0; i <= len(s)-15; i++ {
+		if s[i] >= '2' && s[i] <= '2' && i > 0 && s[i-1] == '-' {
+			candidate := s[i:]
+			if len(candidate) >= 15 && candidate[8] == '-' {
+				_, err := time.Parse("20060102-150405", candidate[:15])
 				if err == nil {
 					name := s[:i-1]
 					return logFileParts{runbook: name, timestamp: candidate}
