@@ -162,6 +162,16 @@ Runbooks can automatically save run output to log files. Add a `log` section to 
 | `dir` | Directory for log files (default: `~/.runbook/logs/`) |
 | `filename` | Filename template using `{name}` and `{timestamp}` (default: `{name}-{timestamp}`) |
 
+**New mode** (default): creates `{name}-{timestamp}.log` per run.
+
+**Append mode**: writes to a single `{name}.log` file with `--- run: timestamp ---` separators between runs. Useful for scheduled jobs where a single growing file with rotation is preferred over hundreds of individual files.
+
+```yaml
+log:
+  enabled: true
+  mode: append
+```
+
 Logs are indexed in `~/.runbook/logs/index.json` for fast lookup. After log rotation, run `runbook log reindex` to rebuild the index.
 
 ### Notifications
@@ -191,15 +201,32 @@ Variables are resolved in priority order (highest wins):
 
 ### 1Password Secrets
 
-Variables with `op://` references (e.g., `op://Vault/Item/field`) are automatically resolved through the 1Password CLI and cached in the system keychain for future runs.
+Variables and SSH keys with `op://` references (e.g., `op://Vault/Item/field`) are resolved through the 1Password CLI and cached in the system keychain for future runs.
+
+```yaml
+variables:
+  - name: api_token
+    default: "op://Vault/Service/token"
+    secret: true
+
+steps:
+  - name: Deploy
+    type: ssh
+    ssh:
+      host: "prod-01"
+      key_file: "op://Vault/SSH Key/private key"
+      command: "deploy.sh"
+```
 
 ```bash
-# Pre-cache all secrets (avoids 1Password prompts during execution)
+# Pre-cache all secrets and SSH keys (one-time Touch ID)
 runbook auth deploy
 
-# Clear cached secrets
+# Clear cached secrets and SSH keys
 runbook auth --clear deploy
 ```
+
+Cached SSH keys bypass 1Password's SSH agent entirely — no Touch ID prompts on repeat runs, cron jobs, or Mac app execution. Supports both OpenSSH and PKCS#8 key formats.
 
 Supported keychains: macOS Keychain, GNOME Secret Service (Linux), Windows Credential Manager.
 
