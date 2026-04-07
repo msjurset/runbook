@@ -3,6 +3,8 @@ package executor
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/msjurset/runbook/internal/credentials"
 	"github.com/msjurset/runbook/internal/runbook"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -162,8 +165,46 @@ func (e *SSHExecutor) Execute(ctx context.Context, vars map[string]string, stdou
 func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, error) {
 	var methods []ssh.AuthMethod
 
+	// Try cached SSH key from keychain (pre-resolved via `runbook auth`)
+	cacheKey := "ssh_key_" + e.Step.Host
+	if cached, _ := credentials.Load(cacheKey); cached != "" {
+		if signer, err := parsePrivateKey([]byte(cached)); err == nil {
+			methods = append(methods, ssh.PublicKeys(signer))
+			return methods, nil // Cached key takes priority — no agent needed
+		}
+	}
+
+	// Try key file — if it's an op:// ref, try keychain cache first
+	if keyFile != "" {
+		if credentials.IsOpRef(keyFile) {
+			// Try keychain cache for op:// key references
+			stepCacheKey := "ssh_key_" + e.Step.Host
+			if cached, _ := credentials.Load(stepCacheKey); cached != "" {
+				if signer, err := parsePrivateKey([]byte(cached)); err == nil {
+					methods = append(methods, ssh.PublicKeys(signer))
+					return methods, nil
+				}
+			}
+			return nil, fmt.Errorf("ssh key %s not cached — run `runbook auth` first", keyFile)
+		}
+
+		if strings.HasPrefix(keyFile, "~/") {
+			home, _ := os.UserHomeDir()
+			keyFile = filepath.Join(home, keyFile[2:])
+		}
+		key, err := os.ReadFile(keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading key file %s: %w", keyFile, err)
+		}
+		signer, err := parsePrivateKey(key)
+		if err != nil {
+			return nil, fmt.Errorf("parsing key file %s: %w", keyFile, err)
+		}
+		methods = append(methods, ssh.PublicKeys(signer))
+	}
+
 	// Try SSH agent — use IdentityAgent from config, then SSH_AUTH_SOCK
-	if e.Step.AgentAuth {
+	if e.Step.AgentAuth && len(methods) == 0 {
 		sock := agentSock
 		if sock == "" {
 			sock = os.Getenv("SSH_AUTH_SOCK")
@@ -177,23 +218,6 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 		}
 	}
 
-	// Try key file (from step config or SSH config)
-	if keyFile != "" {
-		if strings.HasPrefix(keyFile, "~/") {
-			home, _ := os.UserHomeDir()
-			keyFile = filepath.Join(home, keyFile[2:])
-		}
-		key, err := os.ReadFile(keyFile)
-		if err != nil {
-			return nil, fmt.Errorf("reading key file %s: %w", keyFile, err)
-		}
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			return nil, fmt.Errorf("parsing key file %s: %w", keyFile, err)
-		}
-		methods = append(methods, ssh.PublicKeys(signer))
-	}
-
 	// Try default key locations if nothing else configured
 	if len(methods) == 0 {
 		home, _ := os.UserHomeDir()
@@ -203,7 +227,7 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 			if err != nil {
 				continue
 			}
-			signer, err := ssh.ParsePrivateKey(key)
+			signer, err := parsePrivateKey(key)
 			if err != nil {
 				continue
 			}
@@ -216,6 +240,25 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 		return nil, fmt.Errorf("no ssh authentication methods available (set agent_auth, key_file, or have ~/.ssh/id_* keys)")
 	}
 	return methods, nil
+}
+
+// parsePrivateKey handles both OpenSSH and PKCS#8 (1Password export) formats.
+func parsePrivateKey(keyData []byte) (ssh.Signer, error) {
+	signer, err := ssh.ParsePrivateKey(keyData)
+	if err == nil {
+		return signer, nil
+	}
+
+	// Fall back to PKCS#8 format (1Password exports keys this way)
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block found")
+	}
+	key, pkcs8Err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if pkcs8Err != nil {
+		return nil, fmt.Errorf("parsing key: OpenSSH: %v, PKCS#8: %v", err, pkcs8Err)
+	}
+	return ssh.NewSignerFromKey(key)
 }
 
 func knownHostsCallback() (ssh.HostKeyCallback, error) {

@@ -37,6 +37,8 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	found := false
+
+	// Cache op:// variable references
 	for _, v := range book.Variables {
 		if v.Default == "" || !credentials.IsOpRef(v.Default) {
 			continue
@@ -66,8 +68,34 @@ func runAuth(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ %s: cached (%s)\n", v.Name, preview)
 	}
 
+	// Cache op:// SSH keys from steps
+	for _, s := range book.Steps {
+		if s.SSH == nil || s.SSH.KeyFile == "" || !credentials.IsOpRef(s.SSH.KeyFile) {
+			continue
+		}
+		found = true
+		key := "ssh_key_" + s.Name
+
+		if authFlags.clear {
+			if err := credentials.Delete(key); err != nil {
+				fmt.Fprintf(os.Stderr, "  ✗ %s (ssh_key): %v\n", s.Name, err)
+				continue
+			}
+			fmt.Printf("  ✓ %s (ssh_key): cleared from keychain\n", s.Name)
+			continue
+		}
+
+		fmt.Printf("  ▸ %s (ssh_key): resolving %s...\n", s.Name, truncateRef(s.SSH.KeyFile))
+		val, err := credentials.ResolveAndCache(key, s.SSH.KeyFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ✗ %s (ssh_key): %v\n", s.Name, err)
+			continue
+		}
+		fmt.Printf("  ✓ %s (ssh_key): cached (%d bytes)\n", s.Name, len(val))
+	}
+
 	if !found {
-		fmt.Printf("No op:// variables found in %q.\n", book.Name)
+		fmt.Printf("No op:// references found in %q.\n", book.Name)
 	}
 	return nil
 }
