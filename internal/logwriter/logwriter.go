@@ -103,6 +103,11 @@ func RecordIndex(runbookName string, timestamp time.Time, logPath string) {
 	saveIndex(idx)
 }
 
+// ClearIndex removes all entries from the index.
+func ClearIndex() {
+	saveIndex(&IndexData{})
+}
+
 // UpdatePath changes a log path in the index (used by rotation).
 func UpdatePath(oldPath, newPath string) int {
 	idx := loadIndex()
