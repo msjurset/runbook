@@ -22,7 +22,8 @@ import (
 
 // SSHExecutor runs a command on a remote host via SSH.
 type SSHExecutor struct {
-	Step *runbook.SSHStep
+	Step     *runbook.SSHStep
+	StepName string
 }
 
 func (e *SSHExecutor) Execute(ctx context.Context, vars map[string]string, stdout, stderr io.Writer) (*ExecResult, error) {
@@ -166,7 +167,7 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 	var methods []ssh.AuthMethod
 
 	// Try cached SSH key from keychain (pre-resolved via `runbook auth`)
-	cacheKey := "ssh_key_" + e.Step.Host
+	cacheKey := "ssh_key_" + e.StepName
 	if cached, _ := credentials.Load(cacheKey); cached != "" {
 		if signer, err := parsePrivateKey([]byte(cached)); err == nil {
 			methods = append(methods, ssh.PublicKeys(signer))
@@ -174,17 +175,9 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 		}
 	}
 
-	// Try key file — if it's an op:// ref, try keychain cache first
+	// Try key file — if it's an op:// ref, it should have been cached by `runbook auth`
 	if keyFile != "" {
 		if credentials.IsOpRef(keyFile) {
-			// Try keychain cache for op:// key references
-			stepCacheKey := "ssh_key_" + e.Step.Host
-			if cached, _ := credentials.Load(stepCacheKey); cached != "" {
-				if signer, err := parsePrivateKey([]byte(cached)); err == nil {
-					methods = append(methods, ssh.PublicKeys(signer))
-					return methods, nil
-				}
-			}
 			return nil, fmt.Errorf("ssh key %s not cached — run `runbook auth` first", keyFile)
 		}
 

@@ -46,7 +46,7 @@ func New(step runbook.Step) (StepExecutor, error) {
 		if step.SSH == nil {
 			return nil, fmt.Errorf("ssh step %q has no ssh config", step.Name)
 		}
-		return &SSHExecutor{Step: step.SSH}, nil
+		return &SSHExecutor{Step: step.SSH, StepName: step.Name}, nil
 	case runbook.StepHTTP:
 		if step.HTTP == nil {
 			return nil, fmt.Errorf("http step %q has no http config", step.Name)
