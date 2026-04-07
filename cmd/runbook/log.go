@@ -73,6 +73,7 @@ func runLogReindex(cmd *cobra.Command, args []string) error {
 	logwriter.ClearIndex()
 	count := 0
 
+	// Index live log files
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
 			continue
@@ -85,6 +86,32 @@ func runLogReindex(cmd *cobra.Command, args []string) error {
 		}
 
 		logPath := filepath.Join(logsDir, e.Name())
+		info, _ := e.Info()
+		ts := time.Now()
+		if info != nil {
+			ts = info.ModTime()
+		}
+		logwriter.RecordIndex(parts.runbook, ts, logPath)
+		count++
+	}
+
+	// Index archived log files
+	archiveDir := filepath.Join(logsDir, "archive")
+	archiveEntries, _ := os.ReadDir(archiveDir)
+	for _, e := range archiveEntries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".gz") {
+			continue
+		}
+
+		// Strip .gz then .log to get the base name
+		name := strings.TrimSuffix(e.Name(), ".gz")
+		name = strings.TrimSuffix(name, ".log")
+		parts := splitLogFilename(name)
+		if parts.runbook == "" {
+			continue
+		}
+
+		logPath := filepath.Join(archiveDir, e.Name())
 		info, _ := e.Info()
 		ts := time.Now()
 		if info != nil {
