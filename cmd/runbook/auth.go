@@ -68,30 +68,35 @@ func runAuth(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ %s: cached (%s)\n", v.Name, preview)
 	}
 
-	// Cache op:// SSH keys from steps
+	// Cache op:// SSH keys from steps (keyed by op:// ref so all steps share cache)
+	seenKeys := make(map[string]bool)
 	for _, s := range book.Steps {
 		if s.SSH == nil || s.SSH.KeyFile == "" || !credentials.IsOpRef(s.SSH.KeyFile) {
 			continue
 		}
+		key := "ssh_key_" + s.SSH.KeyFile
+		if seenKeys[key] {
+			continue // Already cached this ref
+		}
+		seenKeys[key] = true
 		found = true
-		key := "ssh_key_" + s.Name
 
 		if authFlags.clear {
 			if err := credentials.Delete(key); err != nil {
-				fmt.Fprintf(os.Stderr, "  ✗ %s (ssh_key): %v\n", s.Name, err)
+				fmt.Fprintf(os.Stderr, "  ✗ ssh_key (%s): %v\n", truncateRef(s.SSH.KeyFile), err)
 				continue
 			}
-			fmt.Printf("  ✓ %s (ssh_key): cleared from keychain\n", s.Name)
+			fmt.Printf("  ✓ ssh_key: cleared from keychain\n")
 			continue
 		}
 
-		fmt.Printf("  ▸ %s (ssh_key): resolving %s...\n", s.Name, truncateRef(s.SSH.KeyFile))
+		fmt.Printf("  ▸ ssh_key: resolving %s...\n", truncateRef(s.SSH.KeyFile))
 		val, err := credentials.ResolveAndCache(key, s.SSH.KeyFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ %s (ssh_key): %v\n", s.Name, err)
+			fmt.Fprintf(os.Stderr, "  ✗ ssh_key: %v\n", err)
 			continue
 		}
-		fmt.Printf("  ✓ %s (ssh_key): cached (%d bytes)\n", s.Name, len(val))
+		fmt.Printf("  ✓ ssh_key: cached (%d bytes)\n", len(val))
 	}
 
 	if !found {

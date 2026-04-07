@@ -167,7 +167,11 @@ func (e *SSHExecutor) authMethods(keyFile, agentSock string) ([]ssh.AuthMethod, 
 	var methods []ssh.AuthMethod
 
 	// Try cached SSH key from keychain (pre-resolved via `runbook auth`)
+	// Use key_file as cache key so all steps sharing the same key share the cache
 	cacheKey := "ssh_key_" + e.StepName
+	if keyFile != "" {
+		cacheKey = "ssh_key_" + keyFile
+	}
 	if cached, _ := credentials.Load(cacheKey); cached != "" {
 		if signer, err := parsePrivateKey([]byte(cached)); err == nil {
 			methods = append(methods, ssh.PublicKeys(signer))
