@@ -16,17 +16,18 @@ test:
 release: clean generate test
 	@mkdir -p dist
 	cp runbook.1 dist/
+	cp _runbook dist/
 	GOOS=linux   GOARCH=amd64 go build $(LDFLAGS) -o dist/runbook ./cmd/runbook && \
-		tar -czf dist/runbook-$(VERSION)-linux-amd64.tar.gz -C dist runbook runbook.1 && rm dist/runbook
+		tar -czf dist/runbook-$(VERSION)-linux-amd64.tar.gz -C dist runbook runbook.1 _runbook && rm dist/runbook
 	GOOS=linux   GOARCH=arm64 go build $(LDFLAGS) -o dist/runbook ./cmd/runbook && \
-		tar -czf dist/runbook-$(VERSION)-linux-arm64.tar.gz -C dist runbook runbook.1 && rm dist/runbook
+		tar -czf dist/runbook-$(VERSION)-linux-arm64.tar.gz -C dist runbook runbook.1 _runbook && rm dist/runbook
 	GOOS=darwin  GOARCH=amd64 go build $(LDFLAGS) -o dist/runbook ./cmd/runbook && \
-		tar -czf dist/runbook-$(VERSION)-darwin-amd64.tar.gz -C dist runbook runbook.1 && rm dist/runbook
+		tar -czf dist/runbook-$(VERSION)-darwin-amd64.tar.gz -C dist runbook runbook.1 _runbook && rm dist/runbook
 	GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o dist/runbook ./cmd/runbook && \
-		tar -czf dist/runbook-$(VERSION)-darwin-arm64.tar.gz -C dist runbook runbook.1 && rm dist/runbook
+		tar -czf dist/runbook-$(VERSION)-darwin-arm64.tar.gz -C dist runbook runbook.1 _runbook && rm dist/runbook
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/runbook.exe ./cmd/runbook && \
-		cd dist && zip runbook-$(VERSION)-windows-amd64.zip runbook.exe runbook.1 && rm runbook.exe
-	rm dist/runbook.1
+		cd dist && zip runbook-$(VERSION)-windows-amd64.zip runbook.exe runbook.1 _runbook && rm runbook.exe
+	rm dist/runbook.1 dist/_runbook
 
 clean:
 	rm -rf dist/
