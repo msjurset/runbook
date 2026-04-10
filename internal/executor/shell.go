@@ -7,8 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/msjurset/runbook/internal/runbook"
 )
@@ -83,12 +84,56 @@ func envWithVars(vars map[string]string) []string {
 
 	// Copy parent env, skipping keys we'll override
 	var env []string
+	var currentPath string
 	for _, e := range os.Environ() {
-		key, _, _ := strings.Cut(e, "=")
-		if _, ok := overrides[key]; !ok {
-			env = append(env, e)
+		key, val, _ := strings.Cut(e, "=")
+		if _, ok := overrides[key]; ok {
+			continue
+		}
+		if key == "PATH" {
+			currentPath = val
+			continue // We'll add an augmented PATH below
+		}
+		env = append(env, e)
+	}
+
+	// Ensure HOME is set (cron may not have it)
+	hasHome := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "HOME=") {
+			hasHome = true
+			break
 		}
 	}
+	home, _ := os.UserHomeDir()
+	if !hasHome && home != "" {
+		env = append(env, "HOME="+home)
+	}
+
+	// Augment PATH with common binary locations
+	extras := []string{
+		filepath.Join(home, ".local", "bin"),
+		"/opt/homebrew/bin",
+		"/opt/homebrew/sbin",
+		"/usr/local/bin",
+		filepath.Join(home, "go", "bin"),
+	}
+	for _, dir := range extras {
+		if !strings.Contains(currentPath, dir) {
+			if _, err := os.Stat(dir); err == nil {
+				currentPath = dir + ":" + currentPath
+			}
+		}
+	}
+	if currentPath == "" {
+		currentPath = "/usr/bin:/bin:/usr/sbin:/sbin"
+		for _, dir := range extras {
+			if _, err := os.Stat(dir); err == nil {
+				currentPath = dir + ":" + currentPath
+			}
+		}
+	}
+	env = append(env, "PATH="+currentPath)
 
 	// Append our overrides
 	for k, v := range overrides {
