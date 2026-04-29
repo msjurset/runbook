@@ -3,12 +3,19 @@ package executor
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/msjurset/runbook/internal/runbook"
 )
 
 func TestShellExecutor(t *testing.T) {
+	// Resolve /tmp once: macOS reports /private/tmp via pwd -P, Linux reports /tmp.
+	resolvedTmp, err := filepath.EvalSymlinks("/tmp")
+	if err != nil {
+		t.Fatalf("resolve /tmp: %v", err)
+	}
+
 	tests := []struct {
 		name       string
 		step       *runbook.ShellStep
@@ -35,7 +42,7 @@ func TestShellExecutor(t *testing.T) {
 		{
 			name:       "working directory",
 			step:       &runbook.ShellStep{Command: "pwd -P", Dir: "/tmp"},
-			wantOutput: "/private/tmp\n",
+			wantOutput: resolvedTmp + "\n",
 		},
 	}
 
