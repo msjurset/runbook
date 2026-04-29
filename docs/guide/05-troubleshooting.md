@@ -66,6 +66,7 @@ For categories that span multiple symptoms, walk these trees first. Each ends at
 ### A step isn't doing what I expect
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart TD
     Start([Step misbehaving]) --> Hist[Check history JSON<br/>for this run]
     Hist --> Status{What's the<br/>step status?}
@@ -86,6 +87,7 @@ flowchart TD
 ### A scheduled run isn't firing
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart TD
     Start([Scheduled run not firing]) --> List{runbook cron list<br/>shows the entry?}
     List -->|no| Add[Run runbook cron add again]
@@ -104,6 +106,7 @@ flowchart TD
 ### Variable resolution is producing the wrong value
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart TD
     Start([Variable has unexpected value]) --> Dry[runbook run --dry-run]
     Dry --> Print{Variables block<br/>shows the right value?}

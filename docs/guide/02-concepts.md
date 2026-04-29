@@ -26,6 +26,7 @@ This page is concept-first, not reference-first. Each section explains what's ha
 Every `runbook run <name>` invocation moves through the same eight stages:
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart LR
     Find[Find runbook<br/>by name or path] --> Validate[Validate YAML<br/>structure]
     Validate --> Resolve[Resolve variables<br/>defaults / env / CLI / op://]
@@ -126,6 +127,7 @@ Two runbooks with the same `name:` field shadow each other. Discovery walks top-
 Variables are declared in the runbook YAML with optional defaults, prompts, and a `secret:` flag. When a runbook starts, every declared variable goes through this pipeline:
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart TD
     Start([variable: foo]) --> Default{default<br/>set?}
     Default -->|yes| SetDefault[foo = default]
@@ -499,6 +501,7 @@ Implications worth understanding:
 Where a runbook's output ends up depends on **how the runbook was launched**, not just the YAML. There are three launch sources, each with different defaults:
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart TD
     Source([How was the run launched?])
     Source -->|cron via runbook cron| Cron[stdout redirected by crontab to<br/>~/.runbook/history/&lt;name&gt;.log]

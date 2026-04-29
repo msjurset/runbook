@@ -215,6 +215,7 @@ The notification body includes the runbook name, status, duration, and per-step 
 The single highest-leverage habit when authoring runbooks. Every change should go through this loop:
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart LR
     Edit[Edit YAML] --> Validate[runbook validate]
     Validate -->|errors| Edit
