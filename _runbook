@@ -29,6 +29,7 @@ _runbook() {
         'notify:Send a test notification'
         'cron:Manage scheduled runbook execution'
         'pull:Pull runbooks from a git repo or URL'
+        'backup:Manage runbook backups (per-YAML and snapshots)'
         'man:Display the runbook manual page'
         'help:Help about any command'
         'completion:Generate the autocompletion script for the specified shell'
@@ -147,6 +148,57 @@ _runbook() {
                                         '1:name:'
                                     ;;
                                 list)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                backup)
+                    local -a backup_commands
+                    backup_commands=(
+                        'list:List backup files (yaml + snapshots), newest first'
+                        'show:Print the contents of a backup'
+                        'restore:Restore a per-YAML backup over the current file'
+                        'diff:Show a unified diff between a backup and the current file'
+                        'prune:Delete old backups by count and/or age'
+                        'snapshot:Create a full-state tarball at ~/.runbook/backups/runbook-<ts>.tar.gz'
+                    )
+                    _arguments -C \
+                        '-h[Show help]' \
+                        '--help[Show help]' \
+                        '1: :->backup_cmd' \
+                        '*:: :->backup_args'
+                    case $state in
+                        backup_cmd)
+                            _describe -t backup_commands 'backup commands' backup_commands
+                            ;;
+                        backup_args)
+                            case $words[1] in
+                                list)
+                                    _arguments \
+                                        '-h[Show help]' \
+                                        '--help[Show help]' \
+                                        '1:name:_runbook_names'
+                                    ;;
+                                show|restore|diff)
+                                    _arguments \
+                                        '--at[Match a specific timestamp prefix]:timestamp:' \
+                                        '-h[Show help]' \
+                                        '--help[Show help]' \
+                                        '1:name:_runbook_names'
+                                    ;;
+                                prune)
+                                    _arguments \
+                                        '--keep[Max backups to keep per (kind, name)]:N:' \
+                                        '--older-than[Delete backups older than DURATION (e.g. 7d, 24h)]:duration:' \
+                                        '--dry-run[Print what would be deleted without deleting]' \
+                                        '-h[Show help]' \
+                                        '--help[Show help]'
+                                    ;;
+                                snapshot)
                                     _arguments \
                                         '-h[Show help]' \
                                         '--help[Show help]'

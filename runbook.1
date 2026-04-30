@@ -74,6 +74,44 @@ List all runbook-managed crontab entries.
 .TP
 .B cron remove \fI<name>\fR
 Remove a scheduled runbook from crontab.
+.TP
+.B backup list \fI[name]\fR
+List backup files in \fB~/.runbook/backups/\fR, newest first. Two kinds
+coexist: per-YAML backups (named \fI<name>-<timestamp>.yaml\fR, written by
+the Mac app before each save/delete) and full-state snapshots (named
+\fIrunbook-<timestamp>.tar.gz\fR, written by \fBrunbook backup snapshot\fR).
+Optional \fIname\fR argument filters to one runbook (or \fBrunbook\fR for
+snapshots).
+.TP
+.B backup show \fI<name>\fR \fB[\-\-at\fR \fI<ts-prefix>\fR\fB]\fR
+Print the contents of a backup. For snapshot tarballs, prints a file
+listing instead of binary contents. \fB\-\-at\fR matches a specific
+timestamp prefix (e.g. \fB2026-04-29\fR or \fB2026-04-29T08\fR); the
+newest match wins.
+.TP
+.B backup restore \fI<name>\fR \fB[\-\-at\fR \fI<ts-prefix>\fR\fB]\fR
+Restore a per-YAML backup over the current file. Before overwriting,
+saves a fresh backup of the current state so the restore is itself
+reversible. Snapshot tarballs cannot be auto-restored — use
+\fBtar -xzf <file> -C ~/.runbook\fR.
+.TP
+.B backup diff \fI<name>\fR \fB[\-\-at\fR \fI<ts-prefix>\fR\fB]\fR
+Show a unified diff between a backup and the current file (YAML only).
+.TP
+.B backup prune \fB[\-\-keep\fR \fIN\fR\fB] [\-\-older\-than\fR \fIDURATION\fR\fB] [\-\-dry\-run]\fR
+Delete old backups. \fB\-\-keep\fR keeps the newest \fIN\fR backups per
+\fI(kind, name)\fR group (default 10; pass 0 to disable).
+\fB\-\-older\-than\fR accepts standard durations plus \fIN\fR\fBd\fR for days
+(e.g. \fB7d\fR, \fB30d\fR, \fB24h\fR). \fB\-\-dry\-run\fR previews without
+deleting.
+.TP
+.B backup snapshot
+Create a full-state tarball at
+\fB~/.runbook/backups/runbook\-<timestamp>.tar.gz\fR containing the
+\fBbooks/\fR, \fBhistory/\fR, \fBpinned.json\fR, and \fBhighlights.yaml\fR
+items from \fB~/.runbook/\fR. Logs and the backups directory itself are
+excluded. Designed to be invoked by a goback \fBlocal\fR job for scheduled
+backups.
 .SH OPTIONS
 .SS Global Options
 .TP

@@ -78,6 +78,12 @@ runbook <command> [flags] [arguments]
 | `log reindex` | Rebuild log index from files in the logs directory |
 | `log reset-index` | Clear the log index |
 | `log update <old> <new>` | Update an index entry to point to a new file path |
+| `backup list [name]` | List backup files (per-YAML + snapshots) newest first |
+| `backup show <name>` | Print a backup's contents (or tarball listing) |
+| `backup restore <name>` | Restore a per-YAML backup over the current file (auto-saves a fresh backup of current state first) |
+| `backup diff <name>` | Show a unified diff between a backup and the current file |
+| `backup prune` | Delete old backups by count (`--keep N`) and/or age (`--older-than DURATION`) |
+| `backup snapshot` | Create a full-state tarball at `~/.runbook/backups/runbook-<ts>.tar.gz` |
 
 ### Global Flags
 

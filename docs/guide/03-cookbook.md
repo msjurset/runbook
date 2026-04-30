@@ -23,6 +23,7 @@ Every recipe was checked against current runbook (`runbook validate <file>`). Ru
 - **Logging and notifications** — [append-mode log](#append-mode-log-for-scheduled-runs), [Slack on failure](#slack-on-failure-only), [desktop confirmation](#desktop-notification-on-success), [email digest](#email-digest-with-per-step-status)
 - **Scheduled runs** — [hourly health check](#hourly-health-check-via-cron), [nightly backup with rotation hint](#nightly-backup)
 - **Sharing and templates** — [pull a shared collection](#pull-a-shared-runbook-collection), [publish your own](#publish-your-own-runbook-collection), [scaffold from template](#scaffold-a-new-runbook-from-a-template), [author a template](#author-a-template-for-a-shared-collection), [keep collections fresh](#keep-pulled-collections-fresh)
+- **Backups** — [browse and restore](#browse-and-restore-backups), [scheduled snapshot via goback](#scheduled-snapshot-via-goback), [prune old backups](#prune-old-backups)
 - **End-to-end runbooks** — [deploy with rollback gate](#deploy-with-rollback-gate), [multi-region health probe](#multi-region-health-probe), [pull updates and notify](#pull-updates-and-notify)
 
 ---
@@ -1180,6 +1181,135 @@ runbook cron add sync-collections "0 * * * *"     # hourly
 - **No SSH agent in cron.** If your collection's git remote uses SSH and requires an unlocked key, the scheduled sync will fail. Use HTTPS remotes for collections you sync via cron, or make sure the relevant SSH key is cached (e.g., via `runbook auth` if it's an `op://` key).
 
 **Notes:** `runbook pull` is idempotent — re-pulling an unchanged repo is a no-op (`Already up to date`). The history records will look identical; the cost is one network round-trip per collection per tick.
+
+---
+
+## Backups
+
+Two kinds of backup files coexist in `~/.runbook/backups/`:
+
+- **Per-YAML backups** — `<name>-<ISO timestamp>.yaml`. Written automatically by the Mac app before every save and delete. Fine-grained edit history.
+- **Full-state snapshots** — `runbook-<ISO timestamp>.tar.gz`. Created by `runbook backup snapshot`. Contains `books/`, `history/`, `pinned.json`, `highlights.yaml`. Designed for migration to a new machine and as a goback target.
+
+The `runbook backup` subcommand tree manages both kinds. Restore is intentionally limited to per-YAML backups (snapshot tarballs need `tar -xzf` because they overwrite a directory tree, which is too destructive for a one-liner).
+
+### Browse and restore backups
+
+**When to reach for this:** you saved a YAML, regret one of the changes, want to see what was there before.
+
+**How:**
+
+```sh
+# List everything, newest first
+runbook backup list
+
+# Filter to one runbook
+runbook backup list deploy
+
+# See the contents of the most recent backup for `deploy`
+runbook backup show deploy
+
+# See the diff between the most recent backup and the current file
+runbook backup diff deploy
+
+# Restore the most recent backup (auto-saves the current state first,
+# so this restore is itself reversible via another restore call)
+runbook backup restore deploy
+```
+
+**Variations:**
+
+- **`--at <prefix>`:** match a specific timestamp. Prefix-matched, newest hit wins. Examples: `--at 2026-04-29` (any time on that day), `--at 2026-04-29T08` (any time in the 8 AM hour), `--at 2026-04-29T083014` (exact timestamp).
+- **Pipe `show` to a pager:** `runbook backup show deploy | less` — useful for long files.
+- **Targeted diff:** `runbook backup diff deploy --at 2026-04-28` — compare current state to a specific older backup.
+
+**Gotchas:**
+
+- **The runbook must still exist on disk** for restore and diff to work — the CLI looks up the current file via the same name resolution as `runbook run`. If you've deleted the file entirely, copy the backup manually: `cp ~/.runbook/backups/deploy-<ts>.yaml ~/.runbook/books/deploy.yaml`.
+- **Snapshots can't be restored automatically.** `runbook backup restore` rejects them and points at `tar -xzf <file> -C ~/.runbook` so the user can do it deliberately.
+
+**Notes:** the per-YAML backups are written by the Mac app, so there's nothing the CLI does to *create* them. This subcommand tree is purely for managing what's on disk.
+
+---
+
+### Scheduled snapshot via goback
+
+**When to reach for this:** you want a recurring full-state backup of your runbook home — books, history, pinned, highlights — sent to your normal backup pipeline alongside other apps' state.
+
+**How:**
+
+```sh
+# Manually, to test
+runbook backup snapshot
+# → Creates ~/.runbook/backups/runbook-<ISO timestamp>.tar.gz
+```
+
+The output path is exactly what goback's `local` job format expects. Add this entry to `~/.config/goback/config.yaml`:
+
+```yaml
+- name: runbook
+  type: local
+  schedule: "0 8 * * 0"    # Sunday 8:00 AM
+  folder: runbook
+  filename: "runbook_{2006-01-02}.tar.gz"
+  pre_command: "~/.local/bin/runbook backup snapshot"
+  local_pattern: "~/.runbook/backups/runbook-*.tar.gz"
+  post_command: "rm -f ~/.runbook/backups/runbook-*.tar.gz"
+  retention: 4
+```
+
+**What goback does each Sunday:**
+
+1. Runs `runbook backup snapshot` — writes the tarball to the staging path.
+2. Picks up files matching `local_pattern` and copies them into `~/backups/runbook/runbook_<date>.tar.gz`.
+3. Runs `post_command` to clean up the staging file (so the dir doesn't grow without bound).
+4. Enforces `retention: 4` on the destination — the four most recent archives are kept; older ones are pruned.
+
+**Variations:**
+
+- **More frequent:** `schedule: "0 8 * * *"` for daily.
+- **Different retention:** any integer; goback applies `retention` to the destination folder.
+
+**Gotchas:**
+
+- **The staging file must be cleaned up** by `post_command`, otherwise `~/.runbook/backups/` accumulates tarballs you've already archived elsewhere. The provided `rm -f` glob is matched specifically against the snapshot prefix so it never touches the per-YAML backups.
+- **Cron's PATH doesn't include `~/.local/bin/` by default** — but `runbook` itself augments PATH with `~/.local/bin/`, `/opt/homebrew/bin/`, `/usr/local/bin/`, and `~/go/bin/` for the steps it spawns. Goback's `pre_command` runs through goback's invocation context, so use the absolute path `~/.local/bin/runbook` (as in the config above) to avoid relying on cron's PATH.
+
+**Notes:** the snapshot deliberately excludes `~/.runbook/logs/` (ephemeral) and `~/.runbook/backups/` (recursive — would back up the backups). This keeps the tarball small and round-trippable.
+
+---
+
+### Prune old backups
+
+**When to reach for this:** the backups directory has grown over time and you want to thin it.
+
+**How:**
+
+```sh
+# Default: keep the newest 10 per (kind, name) group
+runbook backup prune
+
+# Show what would happen without deleting
+runbook backup prune --dry-run
+
+# Keep only 5
+runbook backup prune --keep 5
+
+# Delete anything older than 30 days, regardless of count
+runbook backup prune --keep 0 --older-than 30d
+
+# Both rules at once
+runbook backup prune --keep 10 --older-than 90d
+```
+
+**What happens:** the entries are grouped by `(kind, name)` — so `deploy` YAMLs are pruned independently of `nightly-backup` YAMLs, which are pruned independently of snapshot tarballs. Within each group, the newest `--keep N` entries are kept, and anything older than `--older-than DURATION` is removed in addition. `--dry-run` prints the targeted paths without actually deleting them.
+
+**Variations:**
+
+- **Disable the count rule:** `--keep 0` keeps all, ignoring count (useful when paired with `--older-than`).
+- **Days vs. hours:** `--older-than 7d` is shorthand for `168h`. `30d`, `2h30m`, `1h` all parse.
+
+**Notes:** snapshots are pruned by the same rules but in a separate group from per-YAML backups. If you have 20 snapshots and 100 per-YAML backups, `--keep 10` keeps 10 of each, not 10 total.
 
 ---
 

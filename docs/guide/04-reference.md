@@ -24,6 +24,12 @@ Quick-lookup tables. For exhaustive flag documentation, use `runbook <subcommand
 | `runbook log reindex` | Rebuild the log index from disk |
 | `runbook log reset-index` | Clear the log index |
 | `runbook log update <old> <new>` | Update one index entry to point at a new path (post-rotation) |
+| `runbook backup list [name]` | List backup files (per-YAML + snapshots) newest first |
+| `runbook backup show <name> [--at <ts>]` | Print a backup's contents (tarballs print a file listing) |
+| `runbook backup restore <name> [--at <ts>]` | Restore a per-YAML backup; auto-saves the current state as a fresh backup first |
+| `runbook backup diff <name> [--at <ts>]` | Unified diff vs the current file |
+| `runbook backup prune [--keep N] [--older-than DURATION] [--dry-run]` | Delete old backups; default `--keep 10` per (kind, name) |
+| `runbook backup snapshot` | Create a full-state tarball at `~/.runbook/backups/runbook-<ts>.tar.gz` |
 | `runbook man` | Print the roff-formatted man page to stdout |
 | `runbook --version` | Print the binary's version |
 
