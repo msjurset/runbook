@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/msjurset/runbook/internal/cron"
+	"github.com/msjurset/runbook/internal/launchd"
 	"github.com/msjurset/runbook/internal/runbook"
 	"github.com/spf13/cobra"
 )
@@ -69,11 +70,24 @@ func runCronAdd(cmd *cobra.Command, args []string) error {
 
 	logDir := cfg.HistoryDir // reuse history dir for logs
 
-	if err := cron.Add(book.Name, schedule, logDir); err != nil {
+	// Pick the backend automatically: runbooks that resolve op:// secrets
+	// can't run from cron's launchd session on macOS (no keychain access),
+	// so install them as user LaunchAgents instead. Cron is the default for
+	// everything else and the only option on non-macOS.
+	backend := cron.BackendCron
+	backendNote := ""
+	if book.NeedsKeychain() && launchd.Available() {
+		backend = cron.BackendLaunchd
+		backendNote = " (via launchd — keychain-required)"
+	} else if book.NeedsKeychain() && !launchd.Available() {
+		fmt.Fprintln(os.Stderr, "warning: runbook references op:// secrets but the LaunchAgent backend isn't available on this platform; scheduled runs may fail to resolve secrets")
+	}
+
+	if err := cron.Add(book.Name, schedule, logDir, backend); err != nil {
 		return err
 	}
 
-	fmt.Printf("✓ Scheduled %q: %s\n", book.Name, schedule)
+	fmt.Printf("✓ Scheduled %q: %s%s\n", book.Name, schedule, backendNote)
 	fmt.Printf("  Logs: %s/%s.log\n", logDir, book.Name)
 	return nil
 }
@@ -107,9 +121,9 @@ func runCronList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "RUNBOOK\tSCHEDULE\tCOMMAND")
+	fmt.Fprintln(w, "RUNBOOK\tSCHEDULE\tBACKEND\tCOMMAND")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", e.Name, e.Schedule, e.Command)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Name, e.Schedule, e.Backend, e.Command)
 	}
 	return w.Flush()
 }

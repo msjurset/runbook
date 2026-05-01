@@ -1,6 +1,9 @@
 package runbook
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // StepType identifies the kind of step to execute.
 type StepType string
@@ -19,6 +22,41 @@ const (
 	PolicyContinue ErrorPolicy = "continue"
 	PolicyRetry    ErrorPolicy = "retry"
 )
+
+// NeedsKeychain reports whether this runbook references any secret that
+// only resolves through the user's login keychain (op:// URI). Runbooks
+// that need keychain access can't be scheduled via cron on macOS — the
+// cron-launched session lacks keychain reachability — and must instead
+// be installed as LaunchAgents that run inside the user's GUI session.
+//
+// We scan op:// in: variable defaults, SSH key files, Slack webhook,
+// and Email password. Other fields can technically hold op:// references
+// (e.g. inline shell command env values) but the engine doesn't resolve
+// those automatically — only declared secret-bearing fields count.
+func (r *Runbook) NeedsKeychain() bool {
+	if r == nil {
+		return false
+	}
+	for _, v := range r.Variables {
+		if strings.HasPrefix(v.Default, "op://") {
+			return true
+		}
+	}
+	for _, s := range r.Steps {
+		if s.SSH != nil && strings.HasPrefix(s.SSH.KeyFile, "op://") {
+			return true
+		}
+	}
+	if r.Notify != nil {
+		if r.Notify.Slack != nil && strings.HasPrefix(r.Notify.Slack.Webhook, "op://") {
+			return true
+		}
+		if r.Notify.Email != nil && strings.HasPrefix(r.Notify.Email.Password, "op://") {
+			return true
+		}
+	}
+	return false
+}
 
 // Runbook is a named sequence of steps loaded from a YAML definition.
 type Runbook struct {
