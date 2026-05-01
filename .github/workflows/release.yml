@@ -41,34 +41,59 @@ jobs:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          TARBALL_URL="https://github.com/msjurset/runbook/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
-          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | cut -d ' ' -f 1)
+          BASE_URL="https://github.com/msjurset/runbook/releases/download/${GITHUB_REF_NAME}"
+
+          # Source-tarball builds previously failed because internal/manpage/runbook.1
+          # is gitignored — `go:embed` couldn't find it during `brew install`.
+          # We now ship the prebuilt platform tarballs (already produced by
+          # `make release`) and have the formula install them directly.
+          declare -A SHA
+          for arch in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+            SHA[$arch]=$(shasum -a 256 "dist/runbook-${VERSION}-${arch}.tar.gz" | cut -d' ' -f1)
+          done
+
           git clone https://x-access-token:${TAP_TOKEN}@github.com/msjurset/homebrew-tap.git /tmp/homebrew-tap
-          cat > /tmp/homebrew-tap/Formula/runbook.rb <<'FORMULA'
+          cat > /tmp/homebrew-tap/Formula/runbook.rb <<FORMULA
           class Runbook < Formula
-            desc "Personal command center and runbook engine"
+            desc "Run multi-step operational procedures defined in YAML"
             homepage "https://github.com/msjurset/runbook"
-            url "URL_PLACEHOLDER"
-            sha256 "SHA256_PLACEHOLDER"
+            version "${VERSION}"
             license "MIT"
 
-            depends_on "go" => :build
+            on_macos do
+              on_arm do
+                url "${BASE_URL}/runbook-${VERSION}-darwin-arm64.tar.gz"
+                sha256 "${SHA[darwin-arm64]}"
+              end
+              on_intel do
+                url "${BASE_URL}/runbook-${VERSION}-darwin-amd64.tar.gz"
+                sha256 "${SHA[darwin-amd64]}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${BASE_URL}/runbook-${VERSION}-linux-arm64.tar.gz"
+                sha256 "${SHA[linux-arm64]}"
+              end
+              on_intel do
+                url "${BASE_URL}/runbook-${VERSION}-linux-amd64.tar.gz"
+                sha256 "${SHA[linux-amd64]}"
+              end
+            end
 
             def install
-              ldflags = "-X main.version=#{version}"
-              system "go", "build", *std_go_args(ldflags: ldflags), "./cmd/runbook"
+              bin.install "runbook"
               man1.install "runbook.1"
               zsh_completion.install "_runbook"
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/runbook -version")
+              assert_match version.to_s, shell_output("#{bin}/runbook --version")
             end
           end
           FORMULA
           sed -i 's/^          //' /tmp/homebrew-tap/Formula/runbook.rb
-          sed -i "s|URL_PLACEHOLDER|${TARBALL_URL}|" /tmp/homebrew-tap/Formula/runbook.rb
-          sed -i "s|SHA256_PLACEHOLDER|${SHA256}|" /tmp/homebrew-tap/Formula/runbook.rb
           cd /tmp/homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
