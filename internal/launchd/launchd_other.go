@@ -12,7 +12,7 @@ func Available() bool { return false }
 
 func PlistPathFor(_ string) string { return "" }
 
-func Install(_, _, _, _ string) error {
+func Install(_, _, _, _ string, _ []string) error {
 	return errors.New("LaunchAgent backend is only available on macOS")
 }
 

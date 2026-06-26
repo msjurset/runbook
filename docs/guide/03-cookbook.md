@@ -971,6 +971,66 @@ runbook cron add nightly-backup "0 3 * * *"   # 3 AM daily
 
 ---
 
+### Same runbook, multiple schedules with different variables
+
+**When to reach for this:** one logical job — say "generate a report" — but with daily and monthly variants that differ only in *what* gets generated and *where* it's written. You don't want to fork the runbook YAML; you want to bake the variant choice into each schedule.
+
+**YAML (`~/.runbook/books/sales-report.yaml`):**
+
+```yaml
+name: sales-report
+description: Generate a sales CSV; daily vs monthly is decided by --var.
+
+variables:
+  - name: report_type           # "daily" or "monthly"
+    default: daily
+  - name: out_path
+    default: /tmp/sales-daily.csv
+
+steps:
+  - name: Build report
+    type: shell
+    shell:
+      command: |
+        sqlite3 sales.db "SELECT * FROM sales_{{.report_type}}_view" > {{.out_path}}
+        echo "wrote $(wc -l < {{.out_path}}) rows to {{.out_path}}"
+```
+
+**Setup:**
+
+```sh
+runbook cron add sales-report "0 6 * * *" \
+  --var report_type=daily --var out_path=/reports/sales-daily.csv
+
+runbook cron add sales-report "0 7 1 * *" \
+  --var report_type=monthly --var out_path=/reports/sales-monthly.csv
+
+runbook cron list
+# RUNBOOK       SCHEDULE     BACKEND  VARS
+# sales-report  0 6 * * *    cron     report_type=daily out_path=/reports/sales-daily.csv
+# sales-report  0 7 1 * *    cron     report_type=monthly out_path=/reports/sales-monthly.csv
+```
+
+**What happens:** cron fires the same `runbook run sales-report …` twice on different cadences, each invocation gets its own `--var report_type=…` and `--var out_path=…` baked in, and the shell step branches on them. Add as many schedules as you want; each is independent.
+
+**Removing one:** `runbook cron remove sales-report "0 6 * * *"` deletes only the daily schedule, leaving the monthly schedule in place. Pass no schedule argument to clear all schedules for that runbook.
+
+**Branching on the variable inside the runbook:** combine the `--var` flag with the conditional-step recipe above. For example:
+
+```yaml
+- name: Email monthly summary
+  type: shell
+  condition: '{{if eq .report_type "monthly"}}true{{end}}'
+  shell:
+    command: 'mail -s "Monthly sales" exec@example.com < {{.out_path}}'
+```
+
+That step only runs on the 1st-of-month schedule.
+
+**Notes:** values containing spaces or shell metacharacters are fine — they're single-quoted in the crontab line automatically (the launchd backend bypasses shell quoting and passes each var as a discrete `ProgramArguments` element). Empty values (`--var x=`) are allowed. Same `(runbook-name, schedule)` pair is treated as the uniqueness key: adding it twice replaces the prior entry.
+
+---
+
 ## Sharing and templates
 
 Runbook treats your books directory as the unit of distribution. A git repo full of YAML runbooks (plus optional `templates/` subdirectories) can be pulled by anyone with `runbook pull` and used immediately by name. This is how a team standardizes on a shared set of operational runbooks without copying YAML around.

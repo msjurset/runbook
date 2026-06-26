@@ -15,8 +15,8 @@ Quick-lookup tables. For exhaustive flag documentation, use `runbook <subcommand
 | `runbook history` | Show recent runs in a table |
 | `runbook auth <name>` | Pre-resolve and cache `op://` secrets in the keychain |
 | `runbook auth --clear <name>` | Remove a runbook's cached secrets from the keychain |
-| `runbook cron add <name> <schedule>` | Schedule a runbook via crontab |
-| `runbook cron list` | List runbook-managed crontab entries |
+| `runbook cron add <name> <schedule> [--var k=v]…` | Schedule a runbook via crontab; `--var` is repeatable and bakes CLI variables into the scheduled invocation |
+| `runbook cron list` | List runbook-managed crontab entries (and any baked-in `--var` values) |
 | `runbook cron remove <name> [schedule]` | Remove one schedule, or all schedules for a runbook |
 | `runbook pull <repo-url\|file-url>` | Clone a git repo or download a single YAML into the books directory |
 | `runbook pull list` | List pulled repos |
@@ -262,10 +262,10 @@ Common patterns:
 The full installed crontab line for a runbook is:
 
 ```
-<schedule> <bin>/runbook run --no-tui --yes <name> >> <history-dir>/<name>.log 2>&1 # runbook: <name>
+<schedule> <bin>/runbook run --no-tui --yes <name> [--var k='v']… >> <history-dir>/<name>.log 2>&1 # runbook: <name>
 ```
 
-The trailing `# runbook: <name>` marker is how `runbook cron list` and `runbook cron remove` identify managed entries — they leave non-runbook crontab lines alone.
+The trailing `# runbook: <name>` marker is how `runbook cron list` and `runbook cron remove` identify managed entries — they leave non-runbook crontab lines alone. The marker is the same regardless of whether `--var` is present, so the same runbook can be scheduled multiple times with different `--var` payloads under the same `# runbook: <name>` tag. Values are single-quoted so spaces and shell metacharacters survive cron's parse; the launchd backend skips the quoting entirely and passes each variable as a discrete `ProgramArguments` entry.
 
 ## Step status reference
 

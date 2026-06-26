@@ -26,8 +26,9 @@ func PlistPathFor(name string) string {
 
 // Install writes the plist for a runbook and bootstraps it into the user's
 // gui domain. Idempotent: if a plist already exists at the target path it's
-// booted out first so the new one takes effect.
-func Install(name, schedule, binPath, logFile string) error {
+// booted out first so the new one takes effect. vars are the "key=value"
+// pairs appended to the scheduled runbook invocation; pass nil for none.
+func Install(name, schedule, binPath, logFile string, vars []string) error {
 	entries, err := ParseCron(schedule)
 	if err != nil {
 		return fmt.Errorf("parsing schedule: %w", err)
@@ -35,7 +36,7 @@ func Install(name, schedule, binPath, logFile string) error {
 
 	plistPath := PlistPathFor(name)
 	label := LabelFor(name)
-	contents := PlistFor(label, binPath, name, logFile, entries)
+	contents := PlistFor(label, binPath, name, logFile, entries, vars)
 
 	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
 		return fmt.Errorf("creating LaunchAgents dir: %w", err)

@@ -1,4 +1,4 @@
-.TH RUNBOOK 1 "March 2026" "version 1.0.0" "User Commands"
+.TH RUNBOOK 1 "June 2026" "version 1.9.0" "User Commands"
 .SH NAME
 runbook \- personal command center and runbook engine
 .SH SYNOPSIS
@@ -64,16 +64,26 @@ List pulled repositories and their runbook counts.
 .B pull remove \fI<name>\fR
 Remove a previously pulled repository.
 .TP
-.B cron add \fI<name|path>\fR \fI<schedule>\fR
+.B cron add \fI<name|path>\fR \fI<schedule>\fR \fB[\-\-var\fR \fIkey=value\fR\fB]\fR
 Add a crontab entry to run a runbook on a schedule. The schedule uses
 standard cron syntax (5 fields: minute hour day-of-month month day-of-week).
 Output is logged to \fB~/.runbook/history/<name>.log\fR.
+.IP
+\fB\-\-var\fR is repeatable and bakes CLI variables into the scheduled run,
+so the same runbook can be installed under multiple schedules with
+different inputs (e.g. a daily and a monthly variant of one report).
+Values are stored shell-quoted in crontab; for the launchd backend they
+are passed as discrete \fBProgramArguments\fR entries.
 .TP
 .B cron list
-List all runbook-managed crontab entries.
+List all runbook-managed crontab entries, including any baked-in
+\fB\-\-var\fR values for each schedule.
 .TP
-.B cron remove \fI<name>\fR
-Remove a scheduled runbook from crontab.
+.B cron remove \fI<name>\fR \fB[\fIschedule\fB]\fR
+Remove a scheduled runbook from crontab. With no \fIschedule\fR argument,
+removes \fIall\fR schedules for the runbook. With one, removes only the
+matching entry — useful when the same runbook is scheduled multiple times
+with different \fB\-\-var\fR values.
 .TP
 .B backup list \fI[name]\fR
 List backup files in \fB~/.runbook/backups/\fR, newest first. Two kinds
@@ -285,11 +295,21 @@ Download a single runbook file.
 .B runbook cron add update-pihole "0 3 * * 0"
 Schedule the update-pihole runbook to run every Sunday at 3:00 AM.
 .TP
+.B runbook cron add my-report "0 6 * * *" \-\-var type=daily \-\-var path=/r/daily.csv
+.TQ
+.B runbook cron add my-report "0 7 1 * *" \-\-var type=monthly \-\-var path=/r/monthly.csv
+Same runbook scheduled twice with different baked-in variables: a daily
+6 AM run that writes a daily CSV, and a monthly run on the 1st at 7 AM
+that writes a monthly CSV.
+.TP
 .B runbook cron list
-List all scheduled runbooks.
+List all scheduled runbooks (including their \fB\-\-var\fR values).
 .TP
 .B runbook cron remove update-pihole
-Remove the update-pihole schedule.
+Remove the update-pihole schedule (all of them).
+.TP
+.B runbook cron remove my-report "0 6 * * *"
+Remove only the daily schedule, leaving the monthly schedule in place.
 .TP
 .B runbook man | man -l -
 View the formatted manual page.

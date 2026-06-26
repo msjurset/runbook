@@ -1,22 +1,58 @@
 package credentials
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
 
+// trustedApps returns the application paths that should be granted
+// keychain ACL access to items this process creates. By default:
+// /usr/bin/security (so non-interactive callers reading via the CLI
+// don't trip the macOS confirmation dialog after a redeploy changes the
+// runbook binary's code signature), plus the running runbook binary
+// itself (so direct in-process reads also work without prompting).
+// Additional paths can be added via RUNBOOK_KEYCHAIN_TRUST
+// (colon-separated) when runbook is installed in more than one
+// location.
+func trustedApps() []string {
+	apps := []string{"/usr/bin/security"}
+	if self, err := os.Executable(); err == nil && self != "" {
+		apps = append(apps, self)
+	}
+	if extra := os.Getenv("RUNBOOK_KEYCHAIN_TRUST"); extra != "" {
+		for _, p := range strings.Split(extra, ":") {
+			if p != "" {
+				apps = append(apps, p)
+			}
+		}
+	}
+	return apps
+}
+
 func platformStore(key, value string) error {
-	// Delete first to avoid "already exists" error
+	// Delete first so the item is re-created with a fresh ACL; -U updates
+	// the password value but leaves the existing ACL in place — which is
+	// the bug that caused the auth-on-every-deploy loop, since each new
+	// ad-hoc-signed runbook binary needed a re-grant the old ACL didn't
+	// cover.
 	_ = platformDelete(key)
 
-	cmd := exec.Command("security", "add-generic-password",
+	args := []string{
+		"add-generic-password",
 		"-s", serviceName,
 		"-a", key,
 		"-w", value,
 		"-U",
-	)
+	}
+	for _, app := range trustedApps() {
+		args = append(args, "-T", app)
+	}
+
+	cmd := exec.Command("security", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("keychain store: %s: %w", strings.TrimSpace(string(out)), err)
 	}
@@ -29,10 +65,25 @@ func platformLoad(key string) (string, error) {
 		"-a", key,
 		"-w",
 	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		// Item not found is not an error — return empty string
-		return "", nil
+		// Distinguish "no such item" (a normal cache-miss outcome) from
+		// access errors like "User interaction is not allowed." which
+		// surface when called from cron's launchd session or after an
+		// ACL grant was dismissed. The previous blanket-empty-on-error
+		// behavior masked those as "secret not cached" and silently
+		// fell through to `op read`, which is why prompts kept coming
+		// back.
+		msg := strings.TrimSpace(stderr.String())
+		if strings.Contains(msg, "could not be found") {
+			return "", nil
+		}
+		if msg == "" {
+			return "", fmt.Errorf("keychain load: %w", err)
+		}
+		return "", fmt.Errorf("keychain load: %s: %w", msg, err)
 	}
 
 	result := strings.TrimSpace(string(out))

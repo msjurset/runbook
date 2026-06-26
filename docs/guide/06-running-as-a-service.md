@@ -103,17 +103,38 @@ runbook cron remove weekly-summary
 
 ### Variables in scheduled runs
 
-`runbook cron add` doesn't carry `--var` flags into the crontab line. If your runbook has required variables, you have two choices:
+`runbook cron add` accepts a repeatable `--var key=value` flag that bakes CLI variables directly into the crontab line. The same runbook can be scheduled multiple times with different `--var` payloads — daily vs monthly, dev vs prod, "fast path" vs "deep scan" — without forking the YAML.
 
-**Option 1 — bake the variables into the YAML.** Add `default:` values for each variable. This is the right choice for things like target hosts and bucket names that don't change between runs.
-
-**Option 2 — use environment variables.** Add a `cron` line by hand (or edit the one runbook installed) to set `RUNBOOK_VAR_X=value` before invoking the binary:
-
-```
-0 3 * * * RUNBOOK_VAR_VERSION=stable /Users/you/.local/bin/runbook run --no-tui --yes deploy >> ... # runbook: deploy
+```sh
+runbook cron add deploy "0 3 * * 0" --var version=stable
+runbook cron add report "0 6 * * *" --var type=daily   --var path=/r/daily.csv
+runbook cron add report "0 7 1 * *" --var type=monthly --var path=/r/monthly.csv
 ```
 
-Note: editing the line by hand is fine, but be careful — runbook's `cron list` parses by the marker, and a malformed line might still appear in the listing while no longer working.
+What gets installed for the daily report:
+
+```
+0 6 * * * /Users/you/.local/bin/runbook run --no-tui --yes report --var type='daily' --var path='/r/daily.csv' >> /Users/you/.runbook/history/report.log 2>&1 # runbook: report
+```
+
+Values are single-quoted so spaces and shell metacharacters survive cron's parse. The launchd backend (used when a runbook resolves `op://` secrets) bypasses shell quoting entirely and emits each variable as a discrete `ProgramArguments` entry, so the same flag works there too.
+
+**Uniqueness key:** schedules are identified by `(runbook-name, schedule)`. Adding the same name + same schedule twice replaces the prior entry. Same name + *different* schedule + different `--var` set is the supported "multiple variants of one runbook" pattern. See the cookbook recipe [Same runbook, multiple schedules with different variables](03-cookbook.md#same-runbook-multiple-schedules-with-different-variables) for a full example with conditional steps.
+
+**`cron list`** surfaces each schedule's baked-in variables:
+
+```
+RUNBOOK  SCHEDULE     BACKEND  VARS
+deploy   0 3 * * 0    cron     version=stable
+report   0 6 * * *    cron     type=daily out_path=/r/daily.csv
+report   0 7 1 * *    cron     type=monthly out_path=/r/monthly.csv
+```
+
+**Removing one of several schedules:** pass the schedule explicitly. `runbook cron remove report "0 6 * * *"` deletes only the daily; the monthly stays. `runbook cron remove report` (no schedule) clears every schedule for that runbook.
+
+**Other options that still apply.** YAML `default:` values are still the right home for things that don't vary per schedule (target hosts, bucket names, retention counts). `RUNBOOK_VAR_<NAME>` env vars also still work — handy if you want to set a value for the whole crontab via shell, not per-line.
+
+> Earlier versions of runbook required hand-editing the crontab line to inject variables. That's no longer necessary; `--var` is the supported path.
 
 ---
 

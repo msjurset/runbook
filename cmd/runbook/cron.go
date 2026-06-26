@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/msjurset/runbook/internal/cron"
@@ -14,6 +15,10 @@ import (
 var cronCmd = &cobra.Command{
 	Use:   "cron",
 	Short: "Manage scheduled runbook execution via crontab",
+}
+
+var cronAddFlags struct {
+	vars []string
 }
 
 var cronAddCmd = &cobra.Command{
@@ -28,7 +33,16 @@ Examples:
   "0 3 * * 0"     Every Sunday at 3:00 AM
   "*/15 * * * *"   Every 15 minutes
   "0 9 1 * *"     First of every month at 9:00 AM
-  "30 2 * * 1-5"  Weekdays at 2:30 AM`,
+  "30 2 * * 1-5"  Weekdays at 2:30 AM
+
+Use --var (repeatable) to bake CLI variables into the scheduled run.
+Same runbook + different schedule + different vars is supported and
+common — e.g. a daily and a monthly variant of one report:
+
+  runbook cron add my-report "0 6 * * *" \
+    --var report_type=daily --var path=/reports/daily.csv
+  runbook cron add my-report "0 7 1 * *" \
+    --var report_type=monthly --var path=/reports/monthly.csv`,
 	Args: cobra.ExactArgs(2),
 	RunE: runCronAdd,
 }
@@ -52,6 +66,7 @@ var cronListCmd = &cobra.Command{
 }
 
 func init() {
+	cronAddCmd.Flags().StringArrayVar(&cronAddFlags.vars, "var", nil, "set variable for the scheduled run (key=value, repeatable)")
 	cronCmd.AddCommand(cronAddCmd)
 	cronCmd.AddCommand(cronRemoveCmd)
 	cronCmd.AddCommand(cronListCmd)
@@ -83,11 +98,14 @@ func runCronAdd(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "warning: runbook references op:// secrets but the LaunchAgent backend isn't available on this platform; scheduled runs may fail to resolve secrets")
 	}
 
-	if err := cron.Add(book.Name, schedule, logDir, backend); err != nil {
+	if err := cron.Add(book.Name, schedule, logDir, backend, cronAddFlags.vars); err != nil {
 		return err
 	}
 
 	fmt.Printf("✓ Scheduled %q: %s%s\n", book.Name, schedule, backendNote)
+	if len(cronAddFlags.vars) > 0 {
+		fmt.Printf("  Vars: %s\n", strings.Join(cronAddFlags.vars, " "))
+	}
 	fmt.Printf("  Logs: %s/%s.log\n", logDir, book.Name)
 	return nil
 }
@@ -121,9 +139,13 @@ func runCronList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "RUNBOOK\tSCHEDULE\tBACKEND\tCOMMAND")
+	fmt.Fprintln(w, "RUNBOOK\tSCHEDULE\tBACKEND\tVARS")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Name, e.Schedule, e.Backend, e.Command)
+		vars := "-"
+		if len(e.Vars) > 0 {
+			vars = strings.Join(e.Vars, " ")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Name, e.Schedule, e.Backend, vars)
 	}
 	return w.Flush()
 }

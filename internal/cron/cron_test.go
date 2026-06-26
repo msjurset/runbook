@@ -139,3 +139,111 @@ func TestResolveRunbookBin(t *testing.T) {
 		t.Error("resolveRunbookBin() returned empty path")
 	}
 }
+
+func TestFormatVarsForShell(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want string
+	}{
+		{"empty", nil, ""},
+		{"single simple", []string{"k=v"}, "--var k='v'"},
+		{"multiple", []string{"a=1", "b=2"}, "--var a='1' --var b='2'"},
+		{"value with spaces", []string{"path=/tmp/my report.csv"}, "--var path='/tmp/my report.csv'"},
+		{"value with apostrophe", []string{"msg=it's fine"}, `--var msg='it'\''s fine'`},
+		{"value with equals", []string{"q=a=b"}, "--var q='a=b'"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatVarsForShell(tt.in)
+			if got != tt.want {
+				t.Errorf("formatVarsForShell() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShellSplitRoundTrip(t *testing.T) {
+	// Roundtrip: format then shellSplit then parseVarsFromTokens should
+	// recover the original key=value list.
+	tests := [][]string{
+		{"a=1"},
+		{"a=1", "b=2"},
+		{"path=/tmp/with space/file.csv"},
+		{"msg=it's complicated", "x=y"},
+		{"empty_val="},
+	}
+	for _, in := range tests {
+		formatted := formatVarsForShell(in)
+		tokens := shellSplit(formatted)
+		got := parseVarsFromTokens(tokens)
+		if len(got) != len(in) {
+			t.Errorf("roundtrip(%v): got %v (%d), want %d entries", in, got, len(got), len(in))
+			continue
+		}
+		for i := range in {
+			if got[i] != in[i] {
+				t.Errorf("roundtrip(%v)[%d] = %q, want %q", in, i, got[i], in[i])
+			}
+		}
+	}
+}
+
+func TestValidateVars(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      []string
+		wantErr bool
+	}{
+		{"empty", nil, false},
+		{"valid", []string{"a=1", "b=2"}, false},
+		{"empty value", []string{"k="}, false},
+		{"no equals", []string{"foo"}, true},
+		{"empty key", []string{"=value"}, true},
+		{"whitespace key", []string{"a b=v"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateVars(tt.in)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateVars(%v) err=%v, wantErr=%v", tt.in, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseLaunchdMarkerWithVars(t *testing.T) {
+	line := "# runbook(launchd) my-report: 0 6 * * * --var report_type='daily' --var path='/tmp/r.csv'"
+	name, schedule, vars := parseLaunchdMarker(line)
+	if name != "my-report" {
+		t.Errorf("name = %q, want %q", name, "my-report")
+	}
+	if schedule != "0 6 * * *" {
+		t.Errorf("schedule = %q, want %q", schedule, "0 6 * * *")
+	}
+	want := []string{"report_type=daily", "path=/tmp/r.csv"}
+	if len(vars) != len(want) {
+		t.Fatalf("vars len = %d, want %d (got %v)", len(vars), len(want), vars)
+	}
+	for i := range want {
+		if vars[i] != want[i] {
+			t.Errorf("vars[%d] = %q, want %q", i, vars[i], want[i])
+		}
+	}
+}
+
+func TestParseLaunchdMarkerNoVars(t *testing.T) {
+	// Existing markers without --var must still parse — we ship to users
+	// who already have schedules and must keep their crontab valid.
+	line := "# runbook(launchd) my-report: 0 6 * * *"
+	name, schedule, vars := parseLaunchdMarker(line)
+	if name != "my-report" {
+		t.Errorf("name = %q", name)
+	}
+	if schedule != "0 6 * * *" {
+		t.Errorf("schedule = %q", schedule)
+	}
+	if len(vars) != 0 {
+		t.Errorf("vars = %v, want empty", vars)
+	}
+}

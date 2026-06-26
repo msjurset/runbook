@@ -536,7 +536,7 @@ Both modes update an index file at `~/.runbook/logs/index.json` so the Mac app's
 
 ### Cron-launched runs
 
-`runbook cron add <name> "<schedule>"` installs a crontab line that redirects the binary's stdout/stderr into `~/.runbook/history/<name>.log` (note: history dir, not logs dir — historical reasons). This is decoupled from the YAML `log:` block: cron runs always have *some* logfile because crontab does the redirecting.
+`runbook cron add <name> "<schedule>" [--var k=v]…` installs a crontab line that redirects the binary's stdout/stderr into `~/.runbook/history/<name>.log` (note: history dir, not logs dir — historical reasons). This is decoupled from the YAML `log:` block: cron runs always have *some* logfile because crontab does the redirecting. Any `--var key=value` flags passed at schedule time become trailing `--var` arguments on the scheduled invocation, so the same runbook can be installed multiple times under different schedules with different baked-in variables — see [Cookbook › Same runbook, multiple schedules with different variables](03-cookbook.md#same-runbook-multiple-schedules-with-different-variables) for the canonical pattern.
 
 If both are configured (cron + `log: enabled: true`), you'll get two files: the YAML-driven one in `~/.runbook/logs/` and the crontab-driven one in `~/.runbook/history/`. They have the same content. Don't worry about it; the duplication is harmless and the index points at one of them.
 

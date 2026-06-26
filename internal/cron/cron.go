@@ -38,11 +38,18 @@ const (
 )
 
 // Entry represents a runbook schedule, regardless of backend.
+//
+// Vars is the list of CLI variables baked into the schedule, in
+// "key=value" form. They're appended to the scheduled `runbook run`
+// invocation as `--var key=value` pairs so the same runbook can be
+// scheduled multiple times with different inputs (daily vs monthly
+// report, dev vs prod, etc.).
 type Entry struct {
 	Name     string
 	Schedule string
 	Command  string
 	Backend  Backend
+	Vars     []string
 }
 
 // Add installs a schedule for the runbook. Multiple schedules per runbook
@@ -50,18 +57,25 @@ type Entry struct {
 // existing entry. The launchd backend is macOS-only; callers should fall
 // back to BackendCron on other platforms (Add returns an error for an
 // unsupported backend rather than silently dispatching).
-func Add(name, schedule, logDir string, backend Backend) error {
+//
+// vars is the list of CLI variables (in "key=value" form) to bake into
+// the scheduled invocation. They become trailing `--var key=value`
+// arguments to `runbook run`. Pass nil for a vanilla schedule.
+func Add(name, schedule, logDir string, backend Backend, vars []string) error {
+	if err := validateVars(vars); err != nil {
+		return err
+	}
 	switch backend {
 	case BackendLaunchd:
-		return addLaunchd(name, schedule, logDir)
+		return addLaunchd(name, schedule, logDir, vars)
 	case BackendCron, "":
-		return addCron(name, schedule, logDir)
+		return addCron(name, schedule, logDir, vars)
 	default:
 		return fmt.Errorf("unknown backend %q", backend)
 	}
 }
 
-func addCron(name, schedule, logDir string) error {
+func addCron(name, schedule, logDir string, vars []string) error {
 	binPath, err := resolveRunbookBin()
 	if err != nil {
 		return err
@@ -71,7 +85,11 @@ func addCron(name, schedule, logDir string) error {
 	}
 
 	logFile := filepath.Join(logDir, name+".log")
-	cmd := fmt.Sprintf("%s run --no-tui --yes %s >> %s 2>&1", binPath, name, logFile)
+	cmd := fmt.Sprintf("%s run --no-tui --yes %s", binPath, name)
+	if v := formatVarsForShell(vars); v != "" {
+		cmd += " " + v
+	}
+	cmd += fmt.Sprintf(" >> %s 2>&1", logFile)
 	line := fmt.Sprintf("%s %s %s %s", schedule, cmd, cronMarker, name)
 
 	existing, err := readCrontab()
@@ -90,7 +108,7 @@ func addCron(name, schedule, logDir string) error {
 	return writeCrontab(filtered)
 }
 
-func addLaunchd(name, schedule, logDir string) error {
+func addLaunchd(name, schedule, logDir string, vars []string) error {
 	if !launchd.Available() {
 		return fmt.Errorf("LaunchAgent backend not available on this platform")
 	}
@@ -103,7 +121,7 @@ func addLaunchd(name, schedule, logDir string) error {
 	}
 	logFile := filepath.Join(logDir, name+".log")
 
-	if err := launchd.Install(name, schedule, binPath, logFile); err != nil {
+	if err := launchd.Install(name, schedule, binPath, logFile, vars); err != nil {
 		return err
 	}
 
@@ -114,8 +132,109 @@ func addLaunchd(name, schedule, logDir string) error {
 		return err
 	}
 	filtered := filterOutByName(existing, name)
-	filtered = append(filtered, fmt.Sprintf("%s%s: %s", launchdPrefix, name, schedule))
+	marker := fmt.Sprintf("%s%s: %s", launchdPrefix, name, schedule)
+	if v := formatVarsForShell(vars); v != "" {
+		marker += " " + v
+	}
+	filtered = append(filtered, marker)
 	return writeCrontab(filtered)
+}
+
+// validateVars rejects malformed entries before they hit the crontab so
+// the user gets a clear error instead of a silently broken schedule.
+func validateVars(vars []string) error {
+	for _, v := range vars {
+		k, _, ok := strings.Cut(v, "=")
+		if !ok || k == "" {
+			return fmt.Errorf("invalid --var %q (expected key=value)", v)
+		}
+		if strings.ContainsAny(k, " \t\n\r") {
+			return fmt.Errorf("invalid --var key %q (no whitespace allowed)", k)
+		}
+	}
+	return nil
+}
+
+// formatVarsForShell renders --var pairs as space-separated args suitable
+// for inclusion in a crontab line. Values are wrapped in single quotes so
+// internal whitespace and shell metacharacters survive cron's shell-parse;
+// literal single quotes inside a value are escaped with the POSIX '\''
+// idiom.
+func formatVarsForShell(vars []string) string {
+	if len(vars) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for i, v := range vars {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		k, val, _ := strings.Cut(v, "=")
+		sb.WriteString("--var ")
+		sb.WriteString(k)
+		sb.WriteByte('=')
+		sb.WriteByte('\'')
+		sb.WriteString(strings.ReplaceAll(val, "'", `'\''`))
+		sb.WriteByte('\'')
+	}
+	return sb.String()
+}
+
+// parseVarsFromTokens pulls "--var key=value" pairs out of a slice of
+// already-tokenized command parts (the output of splitting a stored
+// crontab command on whitespace AFTER single-quote handling). Returns the
+// vars in original order. Used by List to recover the structured form
+// from a stored crontab line.
+func parseVarsFromTokens(tokens []string) []string {
+	var out []string
+	for i := 0; i < len(tokens); i++ {
+		if tokens[i] != "--var" {
+			continue
+		}
+		if i+1 >= len(tokens) {
+			break
+		}
+		out = append(out, tokens[i+1])
+		i++
+	}
+	return out
+}
+
+// shellSplit is a small shell-style tokenizer that understands single
+// quotes (with POSIX '\'' escaping). Sufficient for our crontab lines,
+// which we authored ourselves — we don't need full shell grammar.
+func shellSplit(s string) []string {
+	var out []string
+	var cur strings.Builder
+	inQuote := false
+	flush := func() {
+		if cur.Len() > 0 {
+			out = append(out, cur.String())
+			cur.Reset()
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '\'' && !inQuote:
+			inQuote = true
+		case c == '\'' && inQuote:
+			// POSIX '\'' escape: closing quote immediately followed by
+			// \' then ' = a literal single quote inside the value.
+			if i+3 < len(s) && s[i+1] == '\\' && s[i+2] == '\'' && s[i+3] == '\'' {
+				cur.WriteByte('\'')
+				i += 3
+				continue
+			}
+			inQuote = false
+		case !inQuote && (c == ' ' || c == '\t'):
+			flush()
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	flush()
+	return out
 }
 
 // Remove deletes ALL schedules for a runbook (both backends).
@@ -161,7 +280,7 @@ func RemoveSchedule(name, schedule string) error {
 				continue
 			}
 			if isLaunchdMarkerFor(line, name) {
-				_, sched := parseLaunchdMarker(line)
+				_, sched, _ := parseLaunchdMarker(line)
 				if sched == schedule {
 					matched = true
 					hadLaunchd = true
@@ -206,21 +325,26 @@ func List() ([]Entry, error) {
 		// Active cron entry: "<schedule> <command> # runbook: <name>"
 		if idx := strings.Index(line, cronMarker); idx >= 0 && !strings.HasPrefix(strings.TrimSpace(line), "#") {
 			name := strings.TrimSpace(line[idx+len(cronMarker):])
+			// Schedule is the first 5 whitespace-separated fields; the
+			// command is whatever's left up to the marker. We shellSplit
+			// the command so single-quoted --var values come back as
+			// single tokens for parseVarsFromTokens.
 			parts := strings.Fields(line[:idx])
 			if len(parts) < 5 {
 				continue
 			}
 			schedule := strings.Join(parts[:5], " ")
 			command := strings.TrimSpace(strings.Join(parts[5:], " "))
+			vars := parseVarsFromTokens(shellSplit(command))
 			entries = append(entries, Entry{
-				Name: name, Schedule: schedule, Command: command, Backend: BackendCron,
+				Name: name, Schedule: schedule, Command: command, Backend: BackendCron, Vars: vars,
 			})
 			continue
 		}
-		// Launchd marker: "# runbook(launchd) <name>: <schedule>"
-		if name, schedule := parseLaunchdMarker(line); name != "" {
+		// Launchd marker: "# runbook(launchd) <name>: <schedule> [--var k=v ...]"
+		if name, schedule, vars := parseLaunchdMarker(line); name != "" {
 			entries = append(entries, Entry{
-				Name: name, Schedule: schedule, Backend: BackendLaunchd,
+				Name: name, Schedule: schedule, Backend: BackendLaunchd, Vars: vars,
 			})
 		}
 	}
@@ -238,23 +362,35 @@ func isCronLineFor(line, name string) bool {
 }
 
 func isLaunchdMarkerFor(line, name string) bool {
-	got, _ := parseLaunchdMarker(line)
+	got, _, _ := parseLaunchdMarker(line)
 	return got == name
 }
 
-// parseLaunchdMarker pulls (name, schedule) out of a "# runbook(launchd) name: schedule"
-// line. Returns ("", "") if line isn't a launchd marker.
-func parseLaunchdMarker(line string) (name, schedule string) {
+// parseLaunchdMarker pulls (name, schedule, vars) out of a
+// "# runbook(launchd) name: <5-field schedule> [--var k=v ...]" line.
+// Returns ("", "", nil) if line isn't a launchd marker. The first 5
+// whitespace-separated fields after the colon are the cron schedule; the
+// remainder, if any, is parsed for --var pairs via shellSplit so single-
+// quoted values containing spaces survive the round-trip.
+func parseLaunchdMarker(line string) (name, schedule string, vars []string) {
 	t := strings.TrimSpace(line)
 	if !strings.HasPrefix(t, launchdPrefix) {
-		return "", ""
+		return "", "", nil
 	}
 	rest := strings.TrimPrefix(t, launchdPrefix)
 	colon := strings.Index(rest, ":")
 	if colon < 0 {
-		return "", ""
+		return "", "", nil
 	}
-	return strings.TrimSpace(rest[:colon]), strings.TrimSpace(rest[colon+1:])
+	name = strings.TrimSpace(rest[:colon])
+	tail := strings.TrimSpace(rest[colon+1:])
+	tokens := shellSplit(tail)
+	if len(tokens) < 5 {
+		return name, tail, nil
+	}
+	schedule = strings.Join(tokens[:5], " ")
+	vars = parseVarsFromTokens(tokens[5:])
+	return name, schedule, vars
 }
 
 func readCrontab() ([]string, error) {
@@ -295,7 +431,7 @@ func filterOutByName(lines []string, name string) []string {
 		if strings.Contains(line, tag) {
 			continue
 		}
-		if got, _ := parseLaunchdMarker(line); got == name {
+		if got, _, _ := parseLaunchdMarker(line); got == name {
 			continue
 		}
 		result = append(result, line)

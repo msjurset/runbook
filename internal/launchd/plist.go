@@ -16,9 +16,13 @@ func LabelFor(name string) string { return LabelPrefix + name }
 // PlistFor renders the LaunchAgent property list for one runbook.
 // `binPath` is the runbook executable (resolved by the caller),
 // `runbookName` is the YAML runbook to invoke, `logFile` is where
-// stdout/stderr are appended, and `entries` are the trigger times
-// produced by ParseCron.
-func PlistFor(label, binPath, runbookName, logFile string, entries []CalEntry) string {
+// stdout/stderr are appended, `entries` are the trigger times produced
+// by ParseCron, and `vars` is the list of "key=value" pairs that get
+// appended as `--var key=value` arguments. Each var pair is emitted as
+// two separate <string> elements (`--var` and the `key=value`) so the
+// value can contain any characters except null without needing further
+// quoting — launchd's ProgramArguments is an array, not a shell line.
+func PlistFor(label, binPath, runbookName, logFile string, entries []CalEntry, vars []string) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">` + "\n")
@@ -29,7 +33,11 @@ func PlistFor(label, binPath, runbookName, logFile string, entries []CalEntry) s
 
 	b.WriteString("  <key>ProgramArguments</key>\n")
 	b.WriteString("  <array>\n")
-	for _, arg := range []string{binPath, "run", "--no-tui", "--yes", runbookName} {
+	args := []string{binPath, "run", "--no-tui", "--yes", runbookName}
+	for _, v := range vars {
+		args = append(args, "--var", v)
+	}
+	for _, arg := range args {
 		fmt.Fprintf(&b, "    <string>%s</string>\n", xmlEscape(arg))
 	}
 	b.WriteString("  </array>\n")

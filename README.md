@@ -69,9 +69,9 @@ runbook <command> [flags] [arguments]
 | `validate <name\|path>` | Validate a runbook without executing |
 | `history` | Show runbook execution history |
 | `auth <name\|path>` | Pre-resolve and cache 1Password secrets |
-| `cron add <name> <schedule>` | Schedule a runbook via crontab |
-| `cron list` | List all scheduled runbooks |
-| `cron remove <name>` | Remove a scheduled runbook |
+| `cron add <name> <schedule> [--var k=v]…` | Schedule a runbook via crontab; `--var` (repeatable) bakes CLI variables into the schedule |
+| `cron list` | List all scheduled runbooks (and their baked-in `--var` values) |
+| `cron remove <name> [schedule]` | Remove a scheduled runbook (one schedule or all) |
 | `pull <repo-url\|file-url>` | Pull runbooks from a git repo or URL |
 | `pull list` | List pulled repositories |
 | `pull remove <name>` | Remove a pulled repository |
@@ -303,11 +303,19 @@ runbook auth deploy
 # Schedule a runbook to run every Sunday at 3am
 runbook cron add update-pihole "0 3 * * 0"
 
-# List scheduled runbooks
+# Schedule the same runbook twice with different baked-in variables —
+# a daily 6 AM run and a 1st-of-month 7 AM run
+runbook cron add my-report "0 6 * * *" --var type=daily   --var path=/r/daily.csv
+runbook cron add my-report "0 7 1 * *" --var type=monthly --var path=/r/monthly.csv
+
+# List scheduled runbooks (shows baked-in --var values)
 runbook cron list
 
-# Remove a schedule
+# Remove ALL schedules for a runbook
 runbook cron remove update-pihole
+
+# Remove only one specific schedule (when a runbook has several)
+runbook cron remove my-report "0 6 * * *"
 ```
 
 ### Cron Schedule Syntax

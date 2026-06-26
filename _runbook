@@ -104,6 +104,7 @@ _runbook() {
                             case $words[1] in
                                 add)
                                     _arguments \
+                                        '*--var[Bake a CLI variable (key=value) into the scheduled run]:variable:' \
                                         '-h[Show help]' \
                                         '--help[Show help]' \
                                         '1:runbook:_runbook_name_or_file' \
