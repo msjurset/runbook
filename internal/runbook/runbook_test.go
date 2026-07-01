@@ -173,3 +173,75 @@ func TestDiscoverNonexistent(t *testing.T) {
 		t.Errorf("Discover() = %v, want nil", books)
 	}
 }
+
+func TestNeedsKeychain(t *testing.T) {
+	tests := []struct {
+		name string
+		book Runbook
+		want bool
+	}{
+		{
+			name: "nil values and empty",
+			book: Runbook{},
+			want: false,
+		},
+		{
+			name: "op:// variable default",
+			book: Runbook{
+				Variables: []VariableDef{
+					{Name: "token", Default: "op://Vault/Token"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "regular variable default",
+			book: Runbook{
+				Variables: []VariableDef{
+					{Name: "token", Default: "env-var"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "op:// SSH key file",
+			book: Runbook{
+				Steps: []Step{
+					{
+						Name: "ssh step",
+						Type: StepSSH,
+						SSH:  &SSHStep{KeyFile: "op://Vault/Key"},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "op:// slack webhook in notify",
+			book: Runbook{
+				Notify: &NotifyConfig{
+					Slack: &SlackConfig{Webhook: "op://Vault/Webhook"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "op:// email password in notify",
+			book: Runbook{
+				Notify: &NotifyConfig{
+					Email: &EmailConfig{Password: "op://Vault/EmailPassword"},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.book.NeedsKeychain(); got != tt.want {
+				t.Errorf("NeedsKeychain() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
